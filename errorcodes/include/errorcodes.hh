@@ -1,8 +1,9 @@
 #pragma once
-
+#include <inttypes.h>
 enum class ErrorCode:int
 {
     OK = 0,
+    
     GENERIC_ERROR = 1,
     QUEUE_OVERLOAD = 2,
     NONE_AVAILABLE=3,
@@ -27,5 +28,7 @@ enum class ErrorCode:int
     SEMAPHORE_NOT_AVAILABLE,
     DEVICE_NOT_RESPONDING,
     HARDWARE_NOT_INITIALIZED,
+    PAYLOAD_TOO_LARGE,
+    OK_BUT_NOT_NEEDED,
 
 };

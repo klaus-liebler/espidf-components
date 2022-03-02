@@ -58,10 +58,10 @@ namespace DS2482
 			return ErrorCode::DEVICE_NOT_RESPONDING;
 
 		// default configuration
-		CLEAR_BIT(currCfg, CONFIG_1WS);
-		CLEAR_BIT(currCfg, CONFIG_SPU);
-		CLEAR_BIT(currCfg, CONFIG_PPM);
-		SET_BIT(currCfg, CONFIG_APU);
+		ClearBitMask(currCfg, CONFIG_1WS);
+		ClearBitMask(currCfg, CONFIG_SPU);
+		ClearBitMask(currCfg, CONFIG_PPM);
+		SetBitMask(currCfg, CONFIG_APU);
 
 		// write the default configuration setup
 		if (!writeConfig())
@@ -483,19 +483,19 @@ namespace DS2482
 		uint8_t read = 0;
 		if (outputA)
 		{
-			SET_BIT(read, 1);
+			SetBitMask(read, 1);
 		}
 		else
 		{
-			CLEAR_BIT(read, 1);
+			ClearBitMask(read, 1);
 		}
 		if (outputB)
 		{
-			SET_BIT(read, 2);
+			SetBitMask(read, 2);
 		}
 		else
 		{
-			CLEAR_BIT(read, 2);
+			ClearBitMask(read, 2);
 		}
 		OWWriteByte(read);
 		OWWriteByte(~read);
@@ -534,6 +534,7 @@ namespace DS2482
 
 	bool M::OWReadDS2413(const FamilyCode family, uint8_t const *const address, uint8_t *setOrClearBit0And1)
 	{
+		/*
 		BeginTransaction(family, address, Command::READ_SCRATCHPAD);
 		uint8_t read = OWReadByte();
 		//die unteren vier maskieren, negieren und nach oben schieben
@@ -546,7 +547,7 @@ namespace DS2482
 		{
 			return false;
 		}
-		if (READ_BIT(read, 0x01))
+		if (GetBitMask(read, 0x01))
 		{
 			SET_BIT(*setOrClearBit0And1, 0);
 		}
@@ -563,10 +564,13 @@ namespace DS2482
 			CLEAR_BIT(*setOrClearBit0And1, 1);
 		}
 		return true;
+		*/
+		return false;
 	}
 
 	bool M::OWReadDS2413(const FamilyCode family, uint8_t const *const address, uint8_t bitPosToSetOrClear, uint32_t *inputState)
 	{
+		/*
 		BeginTransaction(family, address, Command::READ_SCRATCHPAD);
 		uint8_t read = OWReadByte();
 		//die unteren vier maskieren, negieren und nach oben schieben
@@ -596,6 +600,8 @@ namespace DS2482
 			CLEAR_BIT(*inputState, bitPosToSetOrClear + 1);
 		}
 		return true;
+		*/
+		return false;
 	}
 
 	//--------------------------------------------------------------------------
@@ -887,9 +893,9 @@ namespace DS2482
 	{
 		// set the speed
 		if (new_speed == Speed::OVERDRIVE)
-			SET_BIT(currCfg, CONFIG_1WS);
+			SetBitMask(currCfg, CONFIG_1WS);
 		else
-			CLEAR_BIT(currCfg, CONFIG_1WS);
+			ClearBitMask(currCfg, CONFIG_1WS);
 
 		// write the new config
 		writeConfig();
@@ -915,7 +921,7 @@ namespace DS2482
 			return Pullup::STRONG;
 
 		// clear the strong pull-up bit in the global config state
-		CLEAR_BIT(currCfg, CONFIG_SPU);
+		ClearBitMask(currCfg, CONFIG_SPU);
 
 		// write the new config
 		writeConfig();
@@ -937,7 +943,7 @@ namespace DS2482
 	bool M::OWWriteBytePower(uint8_t sendbyte)
 	{
 		// set strong pull-up enable
-		SET_BIT(currCfg, CONFIG_SPU);
+		SetBitMask(currCfg, CONFIG_SPU);
 
 		// write the new config
 		if (!writeConfig())
@@ -966,7 +972,7 @@ namespace DS2482
 		unsigned char rdbit;
 
 		// set strong pull-up enable
-		SET_BIT(currCfg, CONFIG_SPU);
+		SetBitMask(currCfg, CONFIG_SPU);
 
 		// write the new config
 		if (!writeConfig())
