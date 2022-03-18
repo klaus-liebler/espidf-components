@@ -142,7 +142,6 @@ ErrorCode M::SetOutputFull(Output Output, bool on)
 	}
 	uint8_t data = 0xF0;
 	//07,4 on, 09,4 full off
-	uint8_t trials = 10;
 	return I2C::WriteReg(this->i2c_port, (uint8_t)device,  (uint16_t)(0x06+4*(uint8_t)Output+on?1:3), &data, 1)==ESP_OK?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
 }
 

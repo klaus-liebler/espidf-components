@@ -66,6 +66,16 @@ public:
         return ESP_OK;
     }
 
+    esp_err_t Stop()
+    {
+        i2s_zero_dma_buffer(i2s_num);
+        i2s_zero_dma_buffer(i2s_num);
+        this->file = nullptr;
+        this->fileLen = 0;
+        this->frameStart=0;
+        return ESP_OK;
+    }
+
     esp_err_t Loop()
     {
         if (!file)

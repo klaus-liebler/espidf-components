@@ -31,13 +31,13 @@ bool GetBitMask(const T value, const int bitMask) {
 }
 
 template <typename T>
-static inline void ClearBitIdx(T &value, const int bitIdx)
+inline void ClearBitIdx(T &value, const int bitIdx)
 {
     value &= ~(1L << bitIdx);
 }
 
 template <typename T>
-static inline void ClearBitMask(T &value, const int bitMask)
+inline void ClearBitMask(T &value, const int bitMask)
 {
     value &= ~(bitMask);
 }
@@ -55,3 +55,17 @@ bool GetBitInU8Array(const std::array<uint8_t, K> *arr, size_t offset, size_t bi
     uint32_t bitpos = bitIdx & 0b111;
     return b & (1<<bitpos);
 }
+
+int16_t ParseInt16(const uint8_t * const message, uint32_t offset);
+
+void WriteInt16(int16_t value, uint8_t *message, uint32_t offset);
+
+uint16_t ParseUInt16(const uint8_t * const message, uint32_t offset);
+
+uint64_t ParseUInt64(const uint8_t * const message, uint32_t offset);
+
+void WriteUInt16(uint16_t value, uint8_t *message, uint32_t offset);
+
+uint32_t ParseUInt32(const uint8_t * const message, uint32_t offset);
+
+void WriteUInt32(uint32_t value, uint8_t *message, uint32_t offset);

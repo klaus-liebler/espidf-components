@@ -38,7 +38,7 @@ namespace CCS811
 #define CCS811_SW_RESET 0xFF   // 4 bytes
 
   // Pin number connected to nWAKE (nWAKE can also be bound to GND, then pass -1), slave address (5A or 5B)
-  M::M(i2c_port_t i2c_port, CCS811::ADDRESS slaveaddr, CCS811::MODE mode, gpio_num_t nwake) : i2c_sensor(i2c_port, (uint8_t)slaveaddr), mode(mode), nwake(nwake)
+  M::M(i2c_port_t i2c_num, CCS811::ADDRESS slaveaddr, CCS811::MODE mode, gpio_num_t nwake) : I2CSensor(i2c_num, (uint8_t)slaveaddr), mode(mode), nwake(nwake)
   {
   }
 
@@ -51,17 +51,18 @@ namespace CCS811
     uint8_t hw_version;
     uint8_t app_version[2];
     uint8_t status;
+    uint8_t meas_mode[] = {(uint8_t)((uint8_t)(mode) << 4)};
     esp_err_t ok;
     wake_init();
     // Wakeup CCS811
     wake_up();
 
     // Try to ping CCS811 (can we reach CCS811 via I2C?)
-    esp_err_t err = I2C::IsAvailable(this->i2c_port, (uint8_t)this->slaveaddr);
+    esp_err_t err = I2C::IsAvailable(this->i2c_num, (uint8_t)this->address_7bit);
     if (err != ESP_OK)
     {
       // Try the other slave address
-      err = I2C::IsAvailable(this->i2c_port, (uint8_t)(CCS811::ADDRESS::ADDR0) + (uint8_t)(CCS811::ADDRESS::ADDR1) - (uint8_t)(this->slaveaddr));
+      err = I2C::IsAvailable(this->i2c_num, (uint8_t)(CCS811::ADDRESS::ADDR0) + (uint8_t)(CCS811::ADDRESS::ADDR1) - (uint8_t)(this->address_7bit));
       if (err == ESP_OK)
       {
         ESP_LOGE(TAG, "wrong slave address, ping successful on other address");
@@ -151,7 +152,7 @@ namespace CCS811
       ESP_LOGE(TAG, "Not in app mode, or no valid app: 0x%02X", status);
       goto abort_begin;
     }
-    uint8_t meas_mode[] = {(uint8_t)((uint8_t)(mode) << 4)};
+    
     ok = i2cwrite(CCS811_MEAS_MODE, 1, meas_mode);
     if (!ok)
     {
@@ -170,7 +171,7 @@ namespace CCS811
   esp_err_t M::Readout(int64_t& waitTillNextTrigger){
     
     waitTillNextTrigger=0;
-    return this->Read(this->eco2, this->etvoc, NULL, NULL);
+    return this->Read(&this->eco2, &this->etvoc, NULL, NULL);
   }
 
   // Get measurement results from the CCS811 (all args may be NULL), check status via errstat, e.g. ccs811_errstat(errstat)
@@ -309,7 +310,7 @@ namespace CCS811
   }
 
   // Gets version of the CCS811 application (returns -1 on I2C failure).
-  int CCS811Manager::application_version(void)
+  int M::application_version(void)
   {
     uint8_t buf[2];
     wake_up();
@@ -612,12 +613,12 @@ namespace CCS811
   // Writes `count` from `buf` to register at address `regaddr` in the CCS811. Returns false on I2C problems.
   bool M::i2cwrite(int regaddr, int count, uint8_t *buf)
   {
-    return I2C::WriteReg(this->i2c_port, (uint8_t)this->slaveaddr, regaddr, buf, count) == ESP_OK;
+    return I2C::WriteReg(this->i2c_num, (uint8_t)this->address_7bit, regaddr, buf, count) == ESP_OK;
   }
 
   // Reads 'count` bytes from register at address `regaddr`, and stores them in `buf`. Returns false on I2C problems.
   bool M::i2cread(int regaddr, int count, uint8_t *buf)
   {
-    return I2C::ReadReg(this->i2c_port, (uint8_t)this->slaveaddr, regaddr, buf, count) == ESP_OK;
+    return I2C::ReadReg(this->i2c_num, (uint8_t)this->address_7bit, regaddr, buf, count) == ESP_OK;
   }
 }

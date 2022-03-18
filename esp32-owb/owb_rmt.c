@@ -281,7 +281,7 @@ static owb_status _read_bits(const OneWireBus * bus, uint8_t *in, int number_of_
     if (rmt_write_items(info->tx_channel, tx_items, number_of_bits_to_read+1, true) == ESP_OK)
     {
         size_t rx_size = 0;
-        rmt_item32_t* rx_items = (rmt_item32_t *)xRingbufferReceive(info->rb, &rx_size, portMAX_DELAY);
+        rmt_item32_t *rx_items = (rmt_item32_t *)xRingbufferReceive(info->rb, &rx_size, 100 / portTICK_PERIOD_MS);
 
         if (rx_items)
         {
@@ -384,6 +384,7 @@ static owb_status _init(owb_rmt_driver_info *info, gpio_num_t gpio_num,
     rmt_tx.rmt_mode = RMT_MODE_TX;
     if (rmt_config(&rmt_tx) == ESP_OK)
     {
+        rmt_set_source_clk(info->tx_channel, RMT_BASECLK_APB);  // only APB is supported by IDF 4.2
         if (rmt_driver_install(rmt_tx.channel, 0, ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_SHARED) == ESP_OK)
         {
             rmt_config_t rmt_rx = {0};
@@ -397,6 +398,7 @@ static owb_status _init(owb_rmt_driver_info *info, gpio_num_t gpio_num,
             rmt_rx.rx_config.idle_threshold = OW_DURATION_RX_IDLE;
             if (rmt_config(&rmt_rx) == ESP_OK)
             {
+                rmt_set_source_clk(info->rx_channel, RMT_BASECLK_APB);  // only APB is supported by IDF 4.2
                 if (rmt_driver_install(rmt_rx.channel, 512, ESP_INTR_FLAG_LOWMED | ESP_INTR_FLAG_IRAM | ESP_INTR_FLAG_SHARED) == ESP_OK)
                 {
                     rmt_get_ringbuf_handle(info->rx_channel, &info->rb);
@@ -437,8 +439,8 @@ static owb_status _init(owb_rmt_driver_info *info, gpio_num_t gpio_num,
     // attach RMT channels to new gpio pin
     // ATTENTION: set pin for rx first since gpio_output_disable() will
     //            remove rmt output signal in matrix!
-    rmt_set_pin(info->rx_channel, RMT_MODE_RX, gpio_num);
-    rmt_set_pin(info->tx_channel, RMT_MODE_TX, gpio_num);
+    rmt_set_gpio(info->rx_channel, RMT_MODE_RX, gpio_num, false);
+    rmt_set_gpio(info->tx_channel, RMT_MODE_TX, gpio_num, false);
 
     // force pin direction to input to enable path to RX channel
     PIN_INPUT_ENABLE(GPIO_PIN_MUX_REG[gpio_num]);

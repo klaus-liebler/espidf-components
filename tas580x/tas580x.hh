@@ -4,12 +4,9 @@
 #include <inttypes.h>
 #include "tas5805m_reg_cfg.h"
 
-#define TAS5806M_TAG "tas5806m"
+#define TAS5806M_TAG "tas580x"
 
-#define I2C_TAS5806M_MASTER_NUM I2C_MASTER_NUM /*!< I2C port number for master dev */
-
-//sda=2, scl=5, powerDown=33
-namespace TAS5806
+namespace TAS580x
 {
 	enum class ADDR7bit
 	{
@@ -237,8 +234,8 @@ namespace TAS5806
 	class M
 	{
 	private:
-		I2C i2c;
-		TAS5806::ADDR7bit addr;
+		i2c_port_t i2c_port;
+		TAS580x::ADDR7bit addr;
 		gpio_num_t power_down;
 
 		esp_err_t tas5805m_transmit_registers(const tas5805m_cfg_reg_t *conf_buf, int size)
@@ -256,7 +253,7 @@ namespace TAS5806
 					vTaskDelay(conf_buf[i].value / portTICK_RATE_MS);
 					break;
 				case CFG_META_BURST:
-					ret = i2c.WriteReg((uint8_t)this->addr, conf_buf[i + 1].offset, (unsigned char *)(&conf_buf[i + 1].value), conf_buf[i].value);
+					ret = I2C::WriteReg(i2c_port, (uint8_t)this->addr, conf_buf[i + 1].offset, (unsigned char *)(&conf_buf[i + 1].value), conf_buf[i].value);
 					i += (conf_buf[i].value / 2) + 1;
 					break;
 				case CFG_END_1:
@@ -266,7 +263,7 @@ namespace TAS5806
 					}
 					break;
 				default:
-					ret = i2c.WriteSingleReg((uint8_t)this->addr, conf_buf[i].offset, conf_buf[i].value);
+					ret = I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, conf_buf[i].offset, conf_buf[i].value);
 					break;
 				}
 				i++;
@@ -281,18 +278,18 @@ namespace TAS5806
 		}
 
 	public:
-		M(I2C &i2c, TAS5806::ADDR7bit addr, gpio_num_t power_down) : i2c(i2c), addr(addr), power_down(power_down)
+		M(i2c_port_t i2c_port, TAS580x::ADDR7bit addr, gpio_num_t power_down) : i2c_port(i2c_port), addr(addr), power_down(power_down)
 		{
 		}
 		//0b00000=0dB, 0b11111=-15,5dB
 		esp_err_t SetAnalogGain(uint8_t gain_0to31)
 		{
-			return i2c.WriteSingleReg((uint8_t)this->addr, R::AGAIN, gain_0to31);
+			return I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::AGAIN, gain_0to31);
 		}
 		//0=MAX Volume, 254=MIN Volume, 255=Mute
 		esp_err_t SetDigitalVolume(uint8_t volume = 0b00110000)
 		{
-			return i2c.WriteSingleReg((uint8_t)this->addr, R::DIG_VOL_CTRL, volume);
+			return I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DIG_VOL_CTRL, volume);
 		}
 
 		static inline int get_volume_index(int vol)
@@ -325,7 +322,7 @@ namespace TAS5806
 			esp_err_t ret = ESP_OK;
 
 
-			ret = i2c.WriteSingleReg((uint8_t)this->addr, R::DIG_VOL_CTRL, tas5805m_volume[vol_idx]);
+			ret = I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DIG_VOL_CTRL, tas5805m_volume[vol_idx]);
 			ESP_LOGI(TAS5806M_TAG, "volume = 0x%x", tas5805m_volume[vol_idx]);
 			return ret;
 		}
@@ -348,21 +345,21 @@ namespace TAS5806
 			byte1 = ((volume_hex >> 0) & 0xFF);
 
 			//w 58 00 00
-			i2c.WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0);
 			//w 58 7f 8c
-			i2c.WriteSingleReg((uint8_t)this->addr, R::SELECT_BOOK, 0x8c);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_BOOK, 0x8c);
 			//w 58 00 2a
-			i2c.WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0x2A);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0x2A);
 			//w 58 24 xx xx xx xx
-			i2c.WriteSingleReg((uint8_t)this->addr, 0x24, byte4);
-			i2c.WriteSingleReg((uint8_t)this->addr, 0x25, byte3);
-			i2c.WriteSingleReg((uint8_t)this->addr, 0x26, byte2);
-			i2c.WriteSingleReg((uint8_t)this->addr, 0x27, byte1);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x24, byte4);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x25, byte3);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x26, byte2);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x27, byte1);
 			//w 58 28 xx xx xx xx
-			i2c.WriteSingleReg((uint8_t)this->addr, 0x28, byte4);
-			i2c.WriteSingleReg((uint8_t)this->addr, 0x29, byte3);
-			i2c.WriteSingleReg((uint8_t)this->addr, 0x2a, byte2);
-			i2c.WriteSingleReg((uint8_t)this->addr, 0x2b, byte1);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x28, byte4);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x29, byte3);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x2a, byte2);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x2b, byte1);
 			return ESP_OK;
 		}
 
@@ -383,12 +380,12 @@ namespace TAS5806
 				DEVICE_CTRL_2_value = 0x03;
 				SAP_CTRL3_value = 0x11;
 			}
-			i2c.WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0);
 
-			i2c.WriteSingleReg((uint8_t)this->addr, R::SELECT_BOOK, 0x00);
-			i2c.WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0);
-			i2c.WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, DEVICE_CTRL_2_value);
-			i2c.WriteSingleReg((uint8_t)this->addr, R::SAP_CTRL3, SAP_CTRL3_value);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_BOOK, 0x00);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, DEVICE_CTRL_2_value);
+			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SAP_CTRL3, SAP_CTRL3_value);
 			return ESP_OK;
 		}
 
@@ -410,17 +407,17 @@ namespace TAS5806
 			vTaskDelay(100 / portTICK_RATE_MS);
 
 			ESP_LOGI(TAS5806M_TAG, "Setting to HI Z");
-			ESP_ERROR_CHECK(i2c.WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x02));
+			ESP_ERROR_CHECK(I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x02));
 			vTaskDelay(100 / portTICK_RATE_MS);
 
 
 			ESP_LOGI(TAS5806M_TAG, "Setting to PLAY");
-			ESP_ERROR_CHECK(i2c.WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x03));
+			ESP_ERROR_CHECK(I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x03));
 
 			vTaskDelay(100 / portTICK_RATE_MS);
 
 			uint8_t h70h71h72[3];
-			ESP_ERROR_CHECK(i2c.ReadReg((uint8_t)this->addr, R::CHAN_FAULT, h70h71h72, 3));
+			ESP_ERROR_CHECK(I2C::ReadReg(i2c_port, (uint8_t)this->addr, R::CHAN_FAULT, h70h71h72, 3));
 
 			ESP_LOGI(TAS5806M_TAG, "0x70 Register: %d", h70h71h72[0]);
 			ESP_LOGI(TAS5806M_TAG, "0x71 Register: %d", h70h71h72[1]);
