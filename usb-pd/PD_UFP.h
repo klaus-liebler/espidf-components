@@ -8,24 +8,10 @@ extern "C" {
     #include "PD_UFP_Protocol.h"
 }
 
-enum {
-    PD_UFP_VOLTAGE_LED_OFF      = 0,
-    PD_UFP_VOLTAGE_LED_5V       = 1,
-    PD_UFP_VOLTAGE_LED_9V       = 2,
-    PD_UFP_VOLTAGE_LED_12V      = 3,
-    PD_UFP_VOLTAGE_LED_15V      = 4,
-    PD_UFP_VOLTAGE_LED_20V      = 5,
-    PD_UFP_VOLTAGE_LED_AUTO     = 6
-};
+
 typedef uint8_t PD_UFP_VOLTAGE_LED_t;
 
-enum {
-    PD_UFP_CURRENT_LED_OFF      = 0,
-    PD_UFP_CURRENT_LED_LE_1V    = 1,
-    PD_UFP_CURRENT_LED_LE_3V    = 2,
-    PD_UFP_CURRENT_LED_GT_3V    = 3,
-    PD_UFP_CURRENT_LED_AUTO     = 4    
-};
+
 typedef uint8_t PD_UFP_CURRENT_LED_t;
 
 enum {

@@ -61,6 +61,10 @@ sample code bearing this copyright.
 #include "driver/rmt.h"
 #include "driver/gpio.h"
 #include "esp_log.h"
+#include "soc/soc.h"
+#include "soc/gpio_periph.h"
+#include "soc/rtc_cntl_reg.h"
+#include "soc/gpio_struct.h"
 
 #undef OW_DEBUG
 

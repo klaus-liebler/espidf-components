@@ -1,3 +1,4 @@
 idf_component_register(SRCS "rotenc.cc"
-                       INCLUDE_DIRS "include")
+                       INCLUDE_DIRS "include"
+                       REQUIRES driver soc)
 

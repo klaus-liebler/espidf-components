@@ -1,3 +1,3 @@
-set(COMPONENT_ADD_INCLUDEDIRS include)
-set(COMPONENT_SRCS "i2c.cc")
-register_component()
+idf_component_register(SRCS "i2c.cc"
+                       INCLUDE_DIRS "include"
+                       REQUIRES driver)

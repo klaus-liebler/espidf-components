@@ -20,7 +20,7 @@ esp_err_t BH1750::Read(float *lux){
     i2c_master_read_byte(cmd, &sensor_data_h, I2C_MASTER_ACK);
     i2c_master_read_byte(cmd, &sensor_data_l, I2C_MASTER_NACK);
     i2c_master_stop(cmd);
-    ret = i2c_master_cmd_begin(i2c_num, cmd, 1000 / portTICK_RATE_MS);
+    ret = i2c_master_cmd_begin(i2c_num, cmd, pdMS_TO_TICKS(1000));
     i2c_cmd_link_delete(cmd);
 
     float val = (float)((sensor_data_h << 8 | sensor_data_l) / 1.2);

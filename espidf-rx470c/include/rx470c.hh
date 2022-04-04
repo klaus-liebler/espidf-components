@@ -4,7 +4,7 @@
 #include <esp_err.h>
 #include <esp_log.h>
 #include <driver/rmt.h>
-#include <driver/periph_ctrl.h>
+//#include <driver/periph_ctrl.h>
 #include <soc/rmt_reg.h>
 #include "sdkconfig.h"
 

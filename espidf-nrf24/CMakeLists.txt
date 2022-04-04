@@ -1,3 +1,4 @@
-set(COMPONENT_ADD_INCLUDEDIRS include)
-set(COMPONENT_SRCS "nrf24.cc")
-register_component()
+idf_component_register(SRCS "nrf24.cc"
+                       INCLUDE_DIRS "include"
+                       REQUIRES driver
+                       )

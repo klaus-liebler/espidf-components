@@ -114,7 +114,7 @@ extern "C" void milightReceiverTask(void *arg)
 
     while (true)
     {
-        vTaskDelay(50 / portTICK_RATE_MS);
+        vTaskDelay(pdMS_TO_TICKS(50));
         if (!milight->recv->IsDataReady())
             continue;
         milight->recv->GetRxData(buf);

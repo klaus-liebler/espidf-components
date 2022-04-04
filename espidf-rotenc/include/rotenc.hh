@@ -1,14 +1,15 @@
 #pragma once
 
 #include <stdio.h>
-#include "esp_log.h"
-#include "sdkconfig.h"
-#include "esp_err.h"
-#include "driver/pcnt.h"
+#include <esp_log.h>
+#include <sdkconfig.h>
+#include <esp_err.h>
+#include <driver/pulse_cnt.h>
+#include <driver/gpio.h>
 
 class cRotaryEncoder{
 public:
-    pcnt_unit_t pcnt_unit;
+    pcnt_unit_handle_t pcnt_unit;
 	gpio_num_t phase_a_gpio_num;     /*!< Phase A GPIO number */
     gpio_num_t phase_b_gpio_num;     /*!< Phase B GPIO number */
 	int minCount;
@@ -46,7 +47,7 @@ public:
      * @param encoder Rotary encoder handle
      * @return Current counter value (the sign indicates the direction of rotation)
      */
-    esp_err_t GetValue(int16_t *value);
+    esp_err_t GetValue(int *value);
 
 	/**
 	 * @brief Create rotary encoder instance for EC11
@@ -59,7 +60,7 @@ public:
 	 *      - ESP_ERR_NO_MEM: Create rotary encoder instance failed because there's no enough capable memory
 	 *      - ESP_FAIL: Create rotary encoder instance failed because of other error
 	 */
-	cRotaryEncoder(pcnt_unit_t pcnt_unit, gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, int minCount, int maxCount);
+	cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, int minCount, int maxCount);
 };
 
 

@@ -41,6 +41,7 @@
 
 #include "owb.h"
 #include "owb_gpio.h"
+#include <rom/ets_sys.h>
 
 static const char * TAG = "owb_gpio";
 
@@ -271,7 +272,7 @@ OneWireBus* owb_gpio_initialize(owb_gpio_driver_info * driver_info, int gpio)
     driver_info->bus.strong_pullup_gpio = GPIO_NUM_NC;
 
     // platform specific:
-    gpio_pad_select_gpio(driver_info->gpio);
+    esp_rom_gpio_pad_select_gpio(driver_info->gpio);
 
 #ifdef PHY_DEBUG
     gpio_config_t io_conf;
