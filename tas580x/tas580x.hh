@@ -237,6 +237,8 @@ namespace TAS580x
 		i2c_port_t i2c_port;
 		TAS580x::ADDR7bit addr;
 		gpio_num_t power_down;
+		bool muted{false};
+		
 
 		esp_err_t tas5805m_transmit_registers(const tas5805m_cfg_reg_t *conf_buf, int size)
 		{
@@ -250,7 +252,7 @@ namespace TAS580x
 					// Used in legacy applications.  Ignored here.
 					break;
 				case CFG_META_DELAY:
-					vTaskDelay(conf_buf[i].value / portTICK_RATE_MS);
+					vTaskDelay(pdMS_TO_TICKS(conf_buf[i].value));
 					break;
 				case CFG_META_BURST:
 					ret = I2C::WriteReg(i2c_port, (uint8_t)this->addr, conf_buf[i + 1].offset, (unsigned char *)(&conf_buf[i + 1].value), conf_buf[i].value);
@@ -365,6 +367,7 @@ namespace TAS580x
 
 		esp_err_t Mute(bool mute)
 		{
+			if(mute==muted) return ESP_OK;
 			uint8_t DEVICE_CTRL_2_value = 0;
 			uint8_t SAP_CTRL3_value = 0;
 
@@ -373,20 +376,30 @@ namespace TAS580x
 				//mute both left & right channels
 				DEVICE_CTRL_2_value = 0x0b;
 				SAP_CTRL3_value = 0x00;
+				muted=true;
 			}
 			else
 			{
 				//unmute
 				DEVICE_CTRL_2_value = 0x03;
 				SAP_CTRL3_value = 0x11;
+				muted=false;
 			}
 			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0);
-
 			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_BOOK, 0x00);
 			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0);
 			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, DEVICE_CTRL_2_value);
 			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SAP_CTRL3, SAP_CTRL3_value);
+
 			return ESP_OK;
+		}
+
+		esp_err_t PowerUp(){
+			return gpio_set_level(power_down, 1);
+		}
+
+		esp_err_t PowerDown(){
+			return gpio_set_level(power_down, 0);
 		}
 
 		esp_err_t Init(uint8_t initialVolume_0_158)
@@ -394,27 +407,27 @@ namespace TAS580x
 			esp_err_t ret = ESP_OK;
 			/* Register the PDN pin as output and write 1 to enable the TAS chip */
 			gpio_set_level(power_down, 1);
-			gpio_pad_select_gpio((uint8_t)power_down);
+			gpio_reset_pin(power_down);
 			gpio_set_direction(power_down, GPIO_MODE_OUTPUT);
 			gpio_set_pull_mode(power_down, GPIO_FLOATING);
 
 			/* sound is ready */
 			ESP_LOGI(TAS5806M_TAG, "setup of the audio amp begins");
-			vTaskDelay(200 / portTICK_RATE_MS);
+			vTaskDelay(pdMS_TO_TICKS(200));
 
 			/* set PDN to 1 */
 			gpio_set_level(power_down, 1);
-			vTaskDelay(100 / portTICK_RATE_MS);
+			vTaskDelay(pdMS_TO_TICKS(100));
 
 			ESP_LOGI(TAS5806M_TAG, "Setting to HI Z");
 			ESP_ERROR_CHECK(I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x02));
-			vTaskDelay(100 / portTICK_RATE_MS);
+			vTaskDelay(pdMS_TO_TICKS(100));
 
 
 			ESP_LOGI(TAS5806M_TAG, "Setting to PLAY");
 			ESP_ERROR_CHECK(I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x03));
 
-			vTaskDelay(100 / portTICK_RATE_MS);
+			vTaskDelay(pdMS_TO_TICKS(100));
 
 			uint8_t h70h71h72[3];
 			ESP_ERROR_CHECK(I2C::ReadReg(i2c_port, (uint8_t)this->addr, R::CHAN_FAULT, h70h71h72, 3));

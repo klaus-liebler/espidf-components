@@ -56,6 +56,10 @@ private:
     }
 
 public:
+    bool IsEmittingSamples(){
+        return file != nullptr;
+    }
+    
     esp_err_t Play(const uint8_t *file, size_t fileLen)
     {
         i2s_zero_dma_buffer(i2s_num);
