@@ -20,8 +20,9 @@
 #include "freertos/task.h"
 #include <driver/i2c.h>
 #include <i2c.hh>
-
+#include <esp_log.h>
 #include "PD_UFP.h"
+#define TAG "USBPD"
 
 constexpr int t_PD_POLLING = 100;
 constexpr int t_TypeCSinkWaitCap =     350;
@@ -83,6 +84,10 @@ void PD_UFP_core_c::init_PPS(uint16_t PPS_voltage, uint8_t PPS_current, enum PD_
     FUSB302.delay_ms = FUSB302_delay_ms;
     if (FUSB302_init(&FUSB302) == FUSB302_SUCCESS && FUSB302_get_ID(&FUSB302, 0, 0) == FUSB302_SUCCESS) {
         status_initialized = 1;
+        ESP_LOGI(TAG, "USBPD successfully initialized");
+    }
+    else{
+        ESP_LOGE(TAG, "USBPD NOT successfully initialized");
     }
 
     // Two stage startup for PPS Voltge < 5V
@@ -102,7 +107,11 @@ void PD_UFP_core_c::init_PPS(uint16_t PPS_voltage, uint8_t PPS_current, enum PD_
 
 void PD_UFP_core_c::run(void)
 {
-    if (timer() || gpio_get_level(PIN_FUSB302_INT)==0) {
+    bool t= timer();
+    bool irq = gpio_get_level(PIN_FUSB302_INT)==0;
+    //if(t) ESP_LOGI(TAG, "timer event");
+    //if(irq) ESP_LOGI(TAG, "irq event");
+    if (t || irq) {
         FUSB302_event_t FUSB302_events = 0;
         for (uint8_t i = 0; i < 3 && FUSB302_alert(&FUSB302, &FUSB302_events) != FUSB302_SUCCESS; i++) {}
         if (FUSB302_events) {
@@ -146,7 +155,7 @@ FUSB302_ret_t PD_UFP_core_c::FUSB302_i2c_write(uint8_t dev_addr, uint8_t reg_add
 
 FUSB302_ret_t PD_UFP_core_c::FUSB302_delay_ms(uint32_t t)
 {
-    vTaskDelay(std::max((int)1, (int)pdMS_TO_TICKS(t)));
+    vTaskDelay(std::max((TickType_t )1, pdMS_TO_TICKS(t)));
     return FUSB302_SUCCESS;
 }
 

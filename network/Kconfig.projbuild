@@ -1,0 +1,49 @@
+menu "Network Configuration"
+    choice
+            bool "Wifi Mode"
+            default NETWORK_WIFI_MODE_MANAGER
+            help
+                Authentication mode.
+    
+            config NETWORK_WIFI_MODE_STA
+                bool "NETWORK_WIFI_MODE_STA"
+            config NETWORK_WIFI_MODE_AP
+                bool "NETWORK_WIFI_MODE_AP"
+            config NETWORK_WIFI_MODE_MANAGER
+                bool "NETWORK_WIFI_MODE_MANAGER"
+    endchoice
+        
+    config NETWORK_WIFI_STA_SSID
+        string "WiFi SSID"
+        default "myssid"
+        depends on NETWORK_WIFI_MODE_STA
+    config NETWORK_WIFI_STA_PASSWORD
+        string "WiFi Password"
+        default "mypassword"
+        depends on NETWORK_WIFI_MODE_STA
+        help
+            WiFi password (WPA or WPA2) to connect to as STA
+            Can be left blank if the network has no security set.
+    config NETWORK_WIFI_AP_SSID
+        string "WiFi AP SSID"
+        default "labathome-%02X%02X%02X"
+        depends on NETWORK_WIFI_MODE_AP || NETWORK_WIFI_MODE_MANAGER
+        help
+            SSID (network name) to use as AP
+    config NETWORK_WIFI_AP_PASSWORD
+        string "WiFi AP Password"
+        default "labathome-%02X%02X%02X"
+        depends on NETWORK_WIFI_MODE_AP || NETWORK_WIFI_MODE_MANAGER
+    config NETWORK_WIFI_AP_CHANNEL
+        int "Wifi AP Channel"
+        default 11
+        depends on NETWORK_WIFI_MODE_AP || NETWORK_WIFI_MODE_MANAGER
+    config NETWORK_AP_MAX_AP_CONN
+        int "Maximal connections to access point"
+        default 2
+        depends on NETWORK_WIFI_MODE_AP || NETWORK_WIFI_MODE_MANAGER
+    config NETWORK_HOSTNAME_PATTERN
+        string "Hostname pattern"
+        default "labathome-%02X%02X%02X"
+        depends on NETWORK_WIFI_MODE_AP || NETWORK_WIFI_MODE_MANAGER
+endmenu

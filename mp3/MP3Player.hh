@@ -198,10 +198,11 @@ public:
 
     esp_err_t InitInternalDACMonoRightPin25()
     {
+        ESP_LOGI(TAG, "Initializing I2S_NUM_0 for internal DAC");
         this->useInternalDAC = true;
         this->i2s_num = I2S_NUM_0; // only I2S_NUM_0 has access to internal DAC!!!
         mp3dec_init(&decoder);
-        i2s_config_t i2s_config;
+        i2s_config_t i2s_config={};
         i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN); // see https://github.com/earlephilhower/ESP8266Audio/blob/master/src/AudioOutputI2S.cpp
         i2s_config.sample_rate = 44100;
         i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
@@ -215,12 +216,15 @@ public:
         i2s_config.tx_desc_auto_clear = false; // Auto clear tx descriptor on underflow
 
         ESP_ERROR_CHECK(i2s_driver_install(i2s_num, &i2s_config, 0, NULL));
-
+        ESP_LOGI(TAG, "i2s_driver_install");
         ESP_ERROR_CHECK(i2s_set_pin(i2s_num, NULL));
+        ESP_LOGI(TAG, "i2s_set_pin");
         ESP_ERROR_CHECK(i2s_set_dac_mode(I2S_DAC_CHANNEL_BOTH_EN));
-        i2s_set_sample_rates(i2s_num, 44100);
-        //dac_output_disable(DAC_CHANNEL_2);
-        //gpio_reset_pin(GPIO_NUM_26);
+        ESP_LOGI(TAG, "i2s_set_dac_mode");
+        ESP_ERROR_CHECK(i2s_set_sample_rates(i2s_num, 44100));
+        ESP_LOGI(TAG, "i2s_set_sample_rates");
+        dac_output_disable(DAC_CHANNEL_2);
+        gpio_reset_pin(GPIO_NUM_26);
         return ESP_OK;
     }
 };

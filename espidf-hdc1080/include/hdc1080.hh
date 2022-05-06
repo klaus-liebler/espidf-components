@@ -69,7 +69,8 @@ namespace hdc1080{
         }
         esp_err_t Trigger(int64_t& wait) override{
             wait=100;
-            return I2C::WriteReg(i2c_num, I2C_ADDRESS, TEMPERATURE_OFFSET, NULL, 0);
+            uint8_t data = TEMPERATURE_OFFSET;
+            return I2C::Write(i2c_num, I2C_ADDRESS, &data, 1);
         }
 
         esp_err_t Readout(int64_t& wait) override{

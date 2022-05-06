@@ -31,6 +31,9 @@ esp_err_t I2C::WriteReg(const i2c_port_t port, uint8_t address7bit, uint8_t reg_
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (address7bit << 1) | I2C_MASTER_WRITE, true);
     i2c_master_write_byte(cmd, reg_addr, true);
+     if(!reg_data){
+        ESP_LOGE(TAG, "Data is NULL for address 0x%02X on port %d", address7bit, port);
+    }
     i2c_master_write(cmd, (uint8_t *)reg_data, len, true);
     i2c_master_stop(cmd);
 
@@ -80,6 +83,7 @@ esp_err_t I2C::ReadReg16(const i2c_port_t port, uint8_t address7bit, uint16_t re
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (address7bit << 1) | I2C_MASTER_WRITE, true);
+    
     i2c_master_write(cmd, (uint8_t*)&reg_addr16, 2, true);
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, (address7bit << 1) | I2C_MASTER_READ, true);
@@ -145,6 +149,9 @@ esp_err_t I2C::Write(const i2c_port_t port, uint8_t address7bit, uint8_t *data, 
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
     i2c_master_start(cmd);
     i2c_master_write_byte(cmd, address7bit << 1 | I2C_MASTER_WRITE, true);
+    if(!data){
+        ESP_LOGE(TAG, "Data is NULL for address 0x%02X on port %d", address7bit, port);
+    }
     i2c_master_write(cmd, data, len, true);
     i2c_master_stop(cmd);
     espRc = i2c_master_cmd_begin(port, cmd, pdMS_TO_TICKS(1000));

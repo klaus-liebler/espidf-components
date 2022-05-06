@@ -1,3 +1,4 @@
+#pragma once
 #include <string.h>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
@@ -16,10 +17,12 @@
 
 #define TAG "NET"
 
+
 esp_netif_t * wifi_netif = NULL;
 esp_netif_t * eth_netif = NULL;
 esp_ip4_addr_t s_ip_addr;
 SemaphoreHandle_t connectSemaphore = NULL;
+
 
 void on_wifi_start(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
@@ -48,7 +51,7 @@ void on_wifi_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, vo
     memcpy(&s_ip_addr, &event->ip_info.ip, sizeof(s_ip_addr));
     xSemaphoreGive(connectSemaphore);
 }
-
+/*
 static void on_wifi_any_ap_event(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
 {
     if (event_id == WIFI_EVENT_AP_STACONNECTED) {
@@ -61,7 +64,7 @@ static void on_wifi_any_ap_event(void* arg, esp_event_base_t event_base, int32_t
                  MAC2STR(event->mac), event->aid);
     }
 }
-/*
+*/
 static void on_eth_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
@@ -95,7 +98,7 @@ void on_eth_any_event(void *arg, esp_event_base_t event_base, int32_t event_id, 
         break;
     }
 }
-*/
+
 
 void initNetIfandEventLoop(){
     ESP_ERROR_CHECK(esp_netif_init());
@@ -176,31 +179,50 @@ void connectSTA2AP(const char* ssid, const char* password, const char* hostnameP
     ESP_ERROR_CHECK(esp_netif_set_hostname(wifi_netif, hostname));
     ESP_ERROR_CHECK(esp_wifi_start());    
 }
-/*
+
 void connectETH(gpio_num_t mdc, gpio_num_t mdio, gpio_num_t reset){
 
     esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
-    eth_netif = esp_netif_new(&cfg);
-    assert(eth_netif);
-    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &on_eth_any_event, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &on_eth_got_ip, NULL));
+    esp_netif_t *eth_netif = esp_netif_new(&cfg);
+
+    // Init MAC and PHY configs to default
     eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
-    mac_config.smi_mdc_gpio_num = mdc;
-    mac_config.smi_mdio_gpio_num = mdio;
     eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
+
     phy_config.phy_addr = 0;
     phy_config.reset_gpio_num = reset;
-    
-    esp_eth_mac_t *mac = esp_eth_mac_new_esp32(&mac_config);
-    esp_eth_phy_t *phy = esp_eth_phy_new_lan8720(&phy_config);
+
+    eth_esp32_emac_config_t esp32_emac_config = ETH_ESP32_EMAC_DEFAULT_CONFIG();
+    esp32_emac_config.smi_mdc_gpio_num = mdc;
+    esp32_emac_config.smi_mdio_gpio_num = mdio;
+    esp_eth_mac_t *mac = esp_eth_mac_new_esp32(&esp32_emac_config, &mac_config);
+
+#define CONFIG_EXAMPLE_ETH_PHY_LAN87XX 1
+
+#if CONFIG_EXAMPLE_ETH_PHY_IP101
+    esp_eth_phy_t *phy = esp_eth_phy_new_ip101(&phy_config);
+#elif CONFIG_EXAMPLE_ETH_PHY_RTL8201
+    esp_eth_phy_t *phy = esp_eth_phy_new_rtl8201(&phy_config);
+#elif CONFIG_EXAMPLE_ETH_PHY_LAN87XX
+    esp_eth_phy_t *phy = esp_eth_phy_new_lan87xx(&phy_config);
+#elif CONFIG_EXAMPLE_ETH_PHY_DP83848
+    esp_eth_phy_t *phy = esp_eth_phy_new_dp83848(&phy_config);
+#elif CONFIG_EXAMPLE_ETH_PHY_KSZ80XX
+    esp_eth_phy_t *phy = esp_eth_phy_new_ksz80xx(&phy_config);
+#endif
+
     esp_eth_config_t config = ETH_DEFAULT_CONFIG(mac, phy);
     esp_eth_handle_t eth_handle = NULL;
     ESP_ERROR_CHECK(esp_eth_driver_install(&config, &eth_handle));
-    // attach Ethernet driver to TCP/IP stack
+    /* attach Ethernet driver to TCP/IP stack */
     ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)));
-    // start Ethernet driver state machine
-    ESP_ERROR_CHECK(esp_eth_start(eth_handle));
-    
+
+
+    // Register user defined event handers
+    ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &on_eth_any_event, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_ETH_GOT_IP, &on_eth_got_ip, NULL));
+    /* start Ethernet driver state machine */
+    ESP_ERROR_CHECK(esp_eth_start(eth_handle));    
 }
-*/
+
 #undef TAG

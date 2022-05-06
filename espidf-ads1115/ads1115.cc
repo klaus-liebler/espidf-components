@@ -17,6 +17,10 @@ constexpr TickType_t SPSindex2WaitingTime[] = {125/portTICK_PERIOD_MS+1, 63/port
 
 esp_err_t ADS1115::Init(ads1115_sps_t sps, TickType_t *howLongToWaitForResult)
 {
+    if(I2C::IsAvailable(this->i2c_port, this->address)!=ESP_OK){
+        *howLongToWaitForResult=portMAX_DELAY;
+        return ESP_FAIL;
+    }
     config.bit.OS = 0; // always start conversion
     config.bit.MUX = (uint16_t)ads1115_mux_t::ADS1115_MUX_0_GND;
     config.bit.PGA = (uint16_t)ads1115_fsr_t::ADS1115_FSR_4_096;
@@ -26,7 +30,7 @@ esp_err_t ADS1115::Init(ads1115_sps_t sps, TickType_t *howLongToWaitForResult)
     config.bit.COMP_POL = 0;
     config.bit.COMP_LAT = 0;
     config.bit.COMP_QUE = 0b11;
-    ESP_LOGI(TAG, "Initial content of config register will be 0x%04X", config.reg);
+    ESP_LOGD(TAG, "Initial content of config register will be 0x%04X", config.reg);
     *howLongToWaitForResult=SPSindex2WaitingTime[config.bit.DR];
     
 	uint8_t out[2];

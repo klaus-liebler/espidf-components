@@ -31,5 +31,5 @@ enum class ErrorCode:int
     PAYLOAD_TOO_LARGE,
     OK_BUT_NOT_NEEDED,
     FUNCTION_NOT_AVAILABLE,
-
+    
 };
