@@ -26,7 +26,6 @@ SemaphoreHandle_t connectSemaphore = NULL;
 
 void on_wifi_start(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
-    ESP_LOGI(TAG, "Wi-Fi started, trying to connect...");
     esp_err_t err = esp_wifi_connect();
     if (err == ESP_ERR_WIFI_NOT_STARTED) {
         return;
@@ -36,7 +35,7 @@ void on_wifi_start(void *arg, esp_event_base_t event_base, int32_t event_id, voi
 
 void on_wifi_disconnect(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
-    ESP_LOGI(TAG, "Wi-Fi disconnected, trying to reconnect...");
+    ESP_LOGW(TAG, "Wi-Fi disconnected, trying to reconnect...");
     esp_err_t err = esp_wifi_connect();
     if (err == ESP_ERR_WIFI_NOT_STARTED) {
         return;
@@ -51,20 +50,7 @@ void on_wifi_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, vo
     memcpy(&s_ip_addr, &event->ip_info.ip, sizeof(s_ip_addr));
     xSemaphoreGive(connectSemaphore);
 }
-/*
-static void on_wifi_any_ap_event(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data)
-{
-    if (event_id == WIFI_EVENT_AP_STACONNECTED) {
-        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
-        ESP_LOGI(TAG, "station " MACSTR " join, AID=%d",
-                 MAC2STR(event->mac), event->aid);
-    } else if (event_id == WIFI_EVENT_AP_STADISCONNECTED) {
-        wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
-        ESP_LOGI(TAG, "station " MACSTR " leave, AID=%d",
-                 MAC2STR(event->mac), event->aid);
-    }
-}
-*/
+
 static void on_eth_got_ip(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
 {
     ip_event_got_ip_t *event = (ip_event_got_ip_t *) event_data;
@@ -145,12 +131,10 @@ void startAP(){
 
 void connectSTA2AP(const char* ssid, const char* password, const char* hostnamePattern){
     connectSemaphore = xSemaphoreCreateBinary();
-
-    
     wifi_netif = esp_netif_create_default_wifi_sta();//s1.3
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg)); //s1.4
-
+    
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_START,  &on_wifi_start, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, WIFI_EVENT_STA_DISCONNECTED, &on_wifi_disconnect, NULL, NULL));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &on_wifi_got_ip, NULL, NULL));                                               

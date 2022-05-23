@@ -37,6 +37,7 @@ class PD_UFP_core_c
         bool is_power_ready(void) { return status_power == STATUS_POWER_TYP; }
         bool is_PPS_ready(void)   { return status_power == STATUS_POWER_PPS; }
         bool is_ps_transition(void) { return send_request || wait_ps_rdy; }
+        bool is_attached(void){return this->FUSB302.state!=0;}
         // Get
         uint16_t get_voltage(void) { return ready_voltage; }    // Voltage in 50mV units, 20mV(PPS)
         uint16_t get_current(void) { return ready_current; }    // Current in 10mA units, 50mA(PPS)

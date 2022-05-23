@@ -28,12 +28,17 @@ namespace MP3
     constexpr size_t HEADER_LENGTH_BYTES = 4;
     constexpr uint8_t SYNCWORDH = 0xff;
     constexpr uint8_t SYNCWORDL = 0xf0;
-}
 
-class MP3Player
+    enum class PlayerMode{
+        UNINITIALIZED,
+        INTERNAL_DAC,
+        EXTERNAL_I2S_DAC,
+    };
+
+    class Player
 {
 private:
-    mp3dec_t decoder;
+    mp3dec_t *decoder;
     i2s_port_t i2s_num;
     int frameStart{0};
     int16_t *outBuffer;
@@ -42,8 +47,9 @@ private:
     size_t fileLen{0};
     int64_t timeCalc{0};
     int64_t timeWrite{0};
-    bool useInternalDAC{false};
+    PlayerMode mode{PlayerMode::UNINITIALIZED};
     uint8_t  gainF2P6{0};
+    int currentSampleRateHz{0};
 
     int FindSyncWordOnAnyPosition(int offset)
     {
@@ -62,6 +68,7 @@ public:
     
     esp_err_t Play(const uint8_t *file, size_t fileLen)
     {
+        if(mode==PlayerMode::UNINITIALIZED) return ESP_FAIL;
         i2s_zero_dma_buffer(i2s_num);
         this->file = file;
         this->fileLen = fileLen;
@@ -74,6 +81,7 @@ public:
 
     esp_err_t Stop()
     {
+        if(mode==PlayerMode::UNINITIALIZED) return ESP_FAIL;
         i2s_zero_dma_buffer(i2s_num);
         this->file = nullptr;
         this->fileLen = 0;
@@ -91,22 +99,25 @@ public:
         return true;
     }
 
-    int16_t Amplify(int16_t s)
+    void AmplifyAndClampAndNormalizeForDAC(int16_t& s)
     {
         int32_t v = (s * gainF2P6) >> 6;
-        if (v < -32767)
-            return -32767;
-        else if (v > 32767)
-            return 32767;
+        if(v>INT16_MAX)
+            s=INT16_MAX;
+        else if(v<INT16_MIN)
+            s=INT16_MIN;
         else
-            return (int16_t)(v & 0xffff);
+            s=v;
+        if(mode==PlayerMode::INTERNAL_DAC){
+            s+=0x8000;
+        }
     }
 
     esp_err_t Loop()
     {
         if (!file)
         {
-            vTaskDelay(1);
+            vTaskDelay(pdMS_TO_TICKS(50));
             return ESP_OK;
         }
 
@@ -123,35 +134,42 @@ public:
         int bytesLeft = fileLen - frameStart;
         mp3dec_frame_info_t info;
         int64_t now = esp_timer_get_time();
-        int samples = mp3dec_decode_frame(&decoder, file + frameStart, bytesLeft, this->outBuffer, &info);
+        int samples = mp3dec_decode_frame(decoder, file + frameStart, bytesLeft, this->outBuffer, &info);
         timeCalc += esp_timer_get_time() - now;
         this->frameStart += info.frame_bytes;
-        ESP_LOGD(TAG, "frameStart=%d; frame_bytes=%d; samples=%d", frameStart, info.frame_bytes, samples); // frameStart=82672; frame_bytes=418; samples=1152
-        if(samples!=1152){
-            ESP_LOGI(TAG, "frameStart=%d; frame_bytes=%d; samples=%d !!!", frameStart, info.frame_bytes, samples);
+        if(this->currentSampleRateHz!=info.hz){
+            i2s_set_sample_rates(i2s_num, info.hz);
+            ESP_LOGI(TAG, "Change sample rate to %d Hz", info.hz);
+            this->currentSampleRateHz=info.hz;
         }
+        
         if (samples == 0)
         {
             return ESP_OK;
         }
-
-        for (size_t i = 0; i < samples * 2; i += 2)
-        {
-            int16_t l = outBuffer[i];
-            int16_t r = outBuffer[i + 1];
-            if (useInternalDAC)
+        if(info.channels==1){
+            //ESP_LOGI(TAG, "frameStart=%d; frame_bytes=%d; channels=%d samples=%d", frameStart, info.frame_bytes, info.channels, samples); // frameStart=82672; frame_bytes=418; samples=1152
+            for (int i = samples-1; i >=0; i--)
             {
-                l = Amplify(l) + 0x8000;
-                r = Amplify(r) + 0x8000;
+                int16_t l = outBuffer[i];
+                int16_t r = outBuffer[i];
+                AmplifyAndClampAndNormalizeForDAC(l);
+                AmplifyAndClampAndNormalizeForDAC(r);
+                outBuffer[2*i] = l;
+                outBuffer[2*i + 1] = r;
             }
-            else
+        }else if(info.channels==2){
+            for (size_t i = 0; i < samples * 2; i += 2)
             {
-                l = Amplify(l);
-                r = Amplify(r);
+                int16_t l = outBuffer[i];
+                int16_t r = outBuffer[i + 1];
+                AmplifyAndClampAndNormalizeForDAC(l);
+                AmplifyAndClampAndNormalizeForDAC(r);
+                outBuffer[i] = l;
+                outBuffer[i + 1] = r;
             }
-            outBuffer[i] = l;
-            outBuffer[i + 1] = r;
         }
+
         size_t i2s_bytes_writen;
         int i2s_bytes_to_write{samples * 4};
         now = esp_timer_get_time();
@@ -163,16 +181,18 @@ public:
         return ESP_OK;
     }
 
-    MP3Player()
+    Player()
     {
         this->outBuffer = new int16_t[2 * MP3::SAMPLES_PER_FRAME];
+        decoder = new mp3dec_t();
         SetGain(1.0);
     }
 
     esp_err_t InitExternalI2SDAC(i2s_port_t i2s_num, gpio_num_t bck, gpio_num_t ws, gpio_num_t data)
     {
         this->i2s_num = i2s_num;
-        mp3dec_init(&decoder);
+        this->mode = PlayerMode::UNINITIALIZED;
+        mp3dec_init(decoder);
         i2s_config_t i2s_config;
         i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
         i2s_config.sample_rate = 44100;
@@ -193,15 +213,16 @@ public:
         pin_config.data_out_num = (int)data;
         pin_config.data_in_num = -1; // Not used
         ESP_ERROR_CHECK(i2s_set_pin(i2s_num, &pin_config));
+        this->mode = PlayerMode::EXTERNAL_I2S_DAC;
         return ESP_OK;
     }
 
     esp_err_t InitInternalDACMonoRightPin25()
     {
         ESP_LOGI(TAG, "Initializing I2S_NUM_0 for internal DAC");
-        this->useInternalDAC = true;
+        this->mode = PlayerMode::UNINITIALIZED;
         this->i2s_num = I2S_NUM_0; // only I2S_NUM_0 has access to internal DAC!!!
-        mp3dec_init(&decoder);
+        mp3dec_init(decoder);
         i2s_config_t i2s_config={};
         i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN); // see https://github.com/earlephilhower/ESP8266Audio/blob/master/src/AudioOutputI2S.cpp
         i2s_config.sample_rate = 44100;
@@ -225,7 +246,11 @@ public:
         ESP_LOGI(TAG, "i2s_set_sample_rates");
         dac_output_disable(DAC_CHANNEL_2);
         gpio_reset_pin(GPIO_NUM_26);
+        this->mode = PlayerMode::INTERNAL_DAC;
         return ESP_OK;
     }
 };
+
+}
+
 #undef TAG

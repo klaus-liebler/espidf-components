@@ -6,6 +6,7 @@
 #include <freertos/event_groups.h>
 #include <freertos/timers.h>
 #include <esp_system.h>
+#include <esp_check.h>
 #include <esp_mac.h>
 #include <esp_wifi.h>
 #include <esp_event.h>
@@ -30,16 +31,6 @@
 
 namespace wifimgr
 {
-    /**
-     * @brief Defines the maximum size of a SSID name. 32 is IEEE standard.
-     * @warning limit is also hard coded in wifi_config_t. Never extend this value.
-     */
-    constexpr size_t MAX_SSID_SIZE = 32;
-    /**
-     * @brief Defines the maximum size of a WPA2 passkey. 64 is IEEE standard.
-     * @warning limit is also hard coded in wifi_config_t. Never extend this value.
-     */
-    constexpr size_t MAX_PASSWORD_SIZE = 64;
     /**
      * @brief Defines the maximum number of access points that can be scanned.
      *
@@ -121,21 +112,16 @@ namespace wifimgr
     /* @brief When set, means user requested for a disconnect */
     constexpr int WIFI_MANAGER_REQUEST_DISCONNECT_BIT = BIT8;
 
-    constexpr char UNIT_SEPARATOR = 0x1F;
-    constexpr char RECORD_SEPARATOR = 0x1E;
-    constexpr char GROUP_SEPARATOR = 0x1D;
-    constexpr char FILE_SEPARATOR = 0x1C;
-    constexpr size_t ONE_AP_LEN = 120;
+    constexpr char UNIT_SEPARATOR{0x1F};
+    constexpr char RECORD_SEPARATOR{0x1E};
+    constexpr char GROUP_SEPARATOR{0x1D};
+    constexpr char FILE_SEPARATOR{0x1C};
+    constexpr size_t ONE_AP_LEN{120};
 
-    const char *wifi_manager_nvs_namespace = "espwifimgr";
+    constexpr char wifi_manager_nvs_namespace[]{"espwifimgr"};
 
     enum class message_code_t
     {
-        NONE,
-        WM_ORDER_START_HTTP_SERVER,
-        WM_ORDER_STOP_HTTP_SERVER,
-        WM_ORDER_START_DNS_SERVICE,
-        WM_ORDER_STOP_DNS_SERVICE,
         WM_ORDER_START_WIFI_SCAN,
         WM_ORDER_LOAD_AND_RESTORE_STA,
         WM_ORDER_CONNECT_STA_USER,
@@ -154,12 +140,13 @@ namespace wifimgr
      *
      * esp-idf maintains a big list of reason codes which in practice are useless for most typical application.
      */
-    enum class update_reason_code_t
+    enum class UpdateReasonCode
     {
-        UPDATE_CONNECTION_OK = 0,
-        UPDATE_FAILED_ATTEMPT = 1,
-        UPDATE_USER_DISCONNECT = 2,
-        UPDATE_LOST_CONNECTION = 3
+        NO_CHANGE=0,
+        CONNECTION_ESTABLISHED = 1,
+        FAILED_ATTEMPT = 2,
+        USER_DISCONNECT = 3,
+        LOST_CONNECTION = 4
     };
 
     struct queue_message
@@ -171,10 +158,9 @@ namespace wifimgr
     esp_netif_t *wifi_netif_sta = NULL;
     esp_netif_t *wifi_netif_ap = NULL;
     
-    wifi_config_t wifi_config_sta = {};
-    wifi_config_t wifi_config_ap = {};
-    
-    wifi_scan_config_t scan_config;
+    wifi_config_t wifi_config_sta = {};//132byte
+    wifi_config_t wifi_config_ap = {};//132byte
+    wifi_scan_config_t scan_config;//28byte
 
     QueueHandle_t wifi_manager_queue;
     TaskHandle_t wifi_manager_task_handle = NULL;
@@ -185,19 +171,18 @@ namespace wifimgr
     EventGroupHandle_t wifi_manager_event_group;
     httpd_handle_t wifi_manager_httpd_handle = NULL;
 
-    wifi_ap_record_t accessp_records[MAX_AP_NUM];
+    wifi_ap_record_t accessp_records[MAX_AP_NUM]; //80byte*15=1200byte
     uint16_t accessp_records_len;
 
-    char ssid_sta[MAX_SSID_SIZE + 1];         // SSID of target AP, +1 for 0-termination
-    char password_sta[MAX_PASSWORD_SIZE + 1]; // Password of target AP., +1 for 0-termination
-
-    char ssid_ap[MAX_SSID_SIZE + 1];         // SSID of target AP, +1 for 0-termination
-    char password_ap[MAX_PASSWORD_SIZE + 1]; // Password of target AP., +1 for 0-termination
-
-    char* hostname;
+    char ssid_sta[MAX_SSID_LEN + 1];         // SSID of target AP, +1 for 0-termination
+    char password_sta[MAX_PASSPHRASE_LEN + 1]; // Password of target AP., +1 for 0-termination
 
 
-    update_reason_code_t urc{update_reason_code_t::UPDATE_CONNECTION_OK};
+    uint8_t* http_buffer{nullptr};
+    size_t   http_buffer_len{0};
+
+
+    UpdateReasonCode urc{UpdateReasonCode::NO_CHANGE};
 
     BaseType_t wifi_manager_send_message(message_code_t code, void *param)
     {
@@ -211,13 +196,13 @@ namespace wifimgr
     {
         ESP_LOGI(TAG, "Retry Timer Tick! Sending ORDER_CONNECT_STA with reason CONNECTION_REQUEST_AUTO_RECONNECT");
         xTimerStop(xTimer, (TickType_t)0);
-        wifi_manager_send_message(message_code_t::WM_ORDER_CONNECT_STA_AUTO_RECONNECT, NULL);
+        wifi_manager_send_message(message_code_t::WM_ORDER_CONNECT_STA_AUTO_RECONNECT, nullptr);
     }
 
     void wifi_manager_timer_shutdown_ap_cb(TimerHandle_t xTimer)
     {
         xTimerStop(xTimer, (TickType_t)0);
-        wifi_manager_send_message(message_code_t::WM_ORDER_STOP_AP, NULL);
+        wifi_manager_send_message(message_code_t::WM_ORDER_STOP_AP, nullptr);
     }
 
     static void wifi_manager_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
@@ -397,100 +382,94 @@ namespace wifimgr
         }
     }
 
+    esp_err_t erase_sta_config(){
+        nvs_handle handle;
+        esp_err_t ret=ESP_OK;
+        ESP_LOGI(TAG, "About to erase config in flash!!");
+        RETURN_FAIL_ON_FALSE(xSemaphoreTake(nvs_sync_mutex, portMAX_DELAY), "Unable to aquire lock");
+        GOTO_ERROR_ON_ERROR(nvs_open(wifi_manager_nvs_namespace, NVS_READWRITE, &handle), "Unable to open nvs partition");
+        GOTO_ERROR_ON_ERROR(nvs_erase_all(handle),"Unable to to erase all keys");
+        ret = nvs_commit(handle);
+    error:
+        nvs_close(handle);
+        xSemaphoreGive(nvs_sync_mutex);
+        return ret;
+    }
+
     esp_err_t wifi_manager_save_sta_config()
     {
         nvs_handle handle;
-        esp_err_t esp_err = ESP_OK;
-        size_t sz;
-
-        bool change = false;
+        esp_err_t ret = ESP_OK;
+        char tmp_ssid[33];     /**< SSID of target AP. */
+        char tmp_password[64]; /**< Password of target AP. */
+        bool change{false};
+        size_t sz{0};
 
         ESP_LOGI(TAG, "About to save config to flash!!");
-
-        if (!xSemaphoreTake(nvs_sync_mutex, portMAX_DELAY))
-        {
-            ESP_LOGE(TAG, "Unable to aquire lock");
-            return ESP_FAIL;
-        }
-
-        char tmp_ssid[32];     /**< SSID of target AP. */
-        char tmp_password[64]; /**< Password of target AP. */
-
-        esp_err = nvs_open(wifi_manager_nvs_namespace, NVS_READWRITE, &handle);
-        if (esp_err != ESP_OK)
-            goto exit;
+        RETURN_FAIL_ON_FALSE(xSemaphoreTake(nvs_sync_mutex, portMAX_DELAY), "Unable to aquire lock");
+        GOTO_ERROR_ON_ERROR(nvs_open(wifi_manager_nvs_namespace, NVS_READWRITE, &handle), "Unable to open nvs partition");
         sz = sizeof(tmp_ssid);
-        esp_err = nvs_get_str(handle, "ssid", tmp_ssid, &sz);
-        if ((esp_err == ESP_OK || esp_err == ESP_ERR_NVS_NOT_FOUND) && strcmp((char *)tmp_ssid, (char *)ssid_sta) != 0)
+        ret = nvs_get_str(handle, "ssid", tmp_ssid, &sz);
+        if ((ret == ESP_OK || ret == ESP_ERR_NVS_NOT_FOUND) && strcmp((char *)tmp_ssid, (char *)ssid_sta) != 0)
         {
             /* different ssid or ssid does not exist in flash: save new ssid */
-            esp_err = nvs_set_str(handle, "ssid", ssid_sta);
-            if (esp_err != ESP_OK)
-                goto exit;
-            change = true;
+            GOTO_ERROR_ON_ERROR(nvs_set_str(handle, "ssid", ssid_sta),  "Unable to nvs_set_str(handle, \"ssid\", ssid_sta)");
             ESP_LOGI(TAG, "wifi_manager_wrote wifi_sta_config: ssid:%s", ssid_sta);
+            change = true;
         }
 
         sz = sizeof(tmp_password);
-        esp_err = nvs_get_str(handle, "password", tmp_password, &sz);
-        if ((esp_err == ESP_OK || esp_err == ESP_ERR_NVS_NOT_FOUND) && strcmp((char *)tmp_password, (char *)password_sta) != 0)
+        ret = nvs_get_str(handle, "password", tmp_password, &sz);
+        if ((ret == ESP_OK || ret == ESP_ERR_NVS_NOT_FOUND) && strcmp((char *)tmp_password, (char *)password_sta) != 0)
         {
             /* different password or password does not exist in flash: save new password */
-            esp_err = nvs_set_str(handle, "password", password_sta);
-            if (esp_err != ESP_OK)
-                goto exit;
-            change = true;
+            GOTO_ERROR_ON_ERROR(nvs_set_str(handle, "password", password_sta), "Unable to nvs_set_str(handle, \"password\", password_sta)");
             ESP_LOGI(TAG, "wifi_manager_wrote wifi_sta_config: password:%s", password_sta);
+            change = true;
         }
         if (change)
         {
-            esp_err = nvs_commit(handle);
+            ret = nvs_commit(handle);
         }
         else
         {
             ESP_LOGI(TAG, "Wifi config was not saved to flash because no change has been detected.");
         }
-    exit:
+    error:
         nvs_close(handle);
         xSemaphoreGive(nvs_sync_mutex);
-        return esp_err;
+        return ret;
     }
 
     bool wifi_manager_fetch_wifi_sta_config()
     {
         nvs_handle handle;
-        esp_err_t esp_err=ESP_OK;
+        esp_err_t ret=ESP_OK;
         char buff[64];
         size_t sz;
-        if (!xSemaphoreTake(nvs_sync_mutex, portMAX_DELAY))
-        {
-            ESP_LOGE(TAG, "In wifi_manager_fetch_wifi_sta_config(): Unable to aquire lock");
-            return ESP_FAIL;
-        }
-        esp_err = nvs_open(wifi_manager_nvs_namespace, NVS_READONLY, &handle);
-        if (esp_err != ESP_OK)
-            goto exit;
-
-        /* ssid */
+        RETURN_FAIL_ON_FALSE(xSemaphoreTake(nvs_sync_mutex, portMAX_DELAY), "Unable to aquire lock");
+        GOTO_ERROR_ON_ERROR(nvs_open(wifi_manager_nvs_namespace, NVS_READWRITE, &handle), "Unable to open nvs partition");
         sz = sizeof(ssid_sta);
-        esp_err = nvs_get_str(handle, "ssid", buff, &sz);
-        if (esp_err != ESP_OK)
-            goto exit;
+        ret =  nvs_get_str(handle, "ssid", buff, &sz);                                                                
+        if (ret != ESP_OK) {                                                      
+            ESP_LOGI(TAG, "Unable to read ssid");                                                     
+            goto error;                                                                      
+        } 
+        
         memcpy(ssid_sta, buff, sz);
-
-        /* password */
         sz = sizeof(password_sta);
-        esp_err = nvs_get_str(handle, "password", buff, &sz);
-        if (esp_err != ESP_OK)
-            goto exit;
+        ret = nvs_get_str(handle, "password", buff, &sz);
+        if (ret != ESP_OK) {                                                      
+            ESP_LOGI(TAG, "Unable to read password");
+            goto error;                                                                      
+        } 
         memcpy(password_sta, buff, sz);
-
         ESP_LOGI(TAG, "wifi_manager_fetch_wifi_sta_config: ssid:%s password:%s", ssid_sta, password_sta);
-        esp_err = (ssid_sta[0] == '\0')?ESP_FAIL:ESP_OK;
-    exit:
+        ret = (ssid_sta[0] == '\0')?ESP_FAIL:ESP_OK;
+    error:
         nvs_close(handle);
         xSemaphoreGive(nvs_sync_mutex);
-        return esp_err;
+        return ret;
     }
 
     extern const char wifimanager_html_gz_start[] asm("_binary_wifimanager_html_gz_start");
@@ -512,22 +491,18 @@ namespace wifimgr
         return ESP_OK;
     }
 
-    constexpr size_t POST_WIFI_MANAGER_BUFF_SIZE = 1024;
+    
     esp_err_t handle_post_wifimanager(httpd_req_t *req)
     {
-        if (req->content_len > POST_WIFI_MANAGER_BUFF_SIZE)
-        { // too large
-            ESP_LOGW(TAG, "req->content_len > POST_WIFI_MANAGER_BUFF_SIZE");
-            return ESP_FAIL;
-        }
-        char buf[POST_WIFI_MANAGER_BUFF_SIZE + 1];
-        int received = httpd_req_recv(req, buf, req->content_len);
-        if (received != req->content_len){
-            ESP_LOGW(TAG, "received != req->content_len");
-            return ESP_FAIL;
-        }
+        esp_err_t ret{ESP_OK};
+        RETURN_FAIL_ON_FALSE(req->content_len < http_buffer_len, "req->content_len(%d) < http_buffer_len(%d)", req->content_len, http_buffer_len);
+            
+        char *buf = (char*)http_buffer;
+        int received = httpd_req_recv(req, buf, http_buffer_len);
+        RETURN_FAIL_ON_FALSE(received == req->content_len, "received (%d) == req->content_len (%d)", received, req->content_len);
+            
         buf[req->content_len] = '\0';
-        char delimiter[] = {UNIT_SEPARATOR};
+        char delimiter[] = {UNIT_SEPARATOR, '\0'};
         char *ptr;
         size_t len;
         size_t pos{0};
@@ -537,52 +512,45 @@ namespace wifimgr
             goto response;
         }
         ptr = strtok(buf, delimiter);
-        if (!ptr)
-        {
-            ESP_LOGW(TAG, "In handle_post_wifimanager(): no ssid found");
-            goto response;
-        }
+        ESP_GOTO_ON_FALSE(ptr, ESP_FAIL, response, TAG, "In handle_post_wifimanager(): no ssid found");
+            
         len = strlen(ptr);
-        if (len > MAX_SSID_SIZE)
-        {
-            ESP_LOGW(TAG, "Problems in handle_put_wifimanager with ssid or password header");
-            goto response;
-        }
+        ESP_GOTO_ON_FALSE(len <= MAX_SSID_LEN, ESP_FAIL, response, TAG, "SSID too long");
+       
         strncpy(ssid_sta, ptr, len);
 
         ptr = strtok(NULL, delimiter);
-        if (!ptr)
-        {
-            ESP_LOGW(TAG, "In handle_post_wifimanager(): no password found");
-            goto response;
-        }
+        ESP_GOTO_ON_FALSE(ptr, ESP_FAIL, response, TAG, "In handle_post_wifimanager(): no password found");
+
         len = strlen(ptr);
-        if (len > MAX_SSID_SIZE)
-        {
-            ESP_LOGW(TAG, "Problems in handle_put_wifimanager with ssid or password header");
-            goto response;
-        }
+
+        ESP_GOTO_ON_FALSE(len <= MAX_PASSPHRASE_LEN, ESP_FAIL, response, TAG, "PASSPHRASE too long");
+       
         strncpy(password_sta, ptr, len);
         ESP_LOGI(TAG, "Got a new SSID %s and PASSWORD %s from browser.", ssid_sta, password_sta);
         wifi_manager_send_message(message_code_t::WM_ORDER_CONNECT_STA_USER, nullptr);
     response:
-        if (xSemaphoreTake(wifi_manager_aplist_mutex, portMAX_DELAY) != pdTRUE)
-            return ESP_FAIL;
+        RETURN_FAIL_ON_FALSE(xSemaphoreTake(wifi_manager_aplist_mutex, portMAX_DELAY), "Cannot get aplist_mutex");
 
         esp_netif_ip_info_t ip_info = {};
         esp_netif_get_ip_info(wifi_netif_sta, &ip_info);
-        pos += snprintf(buf + pos, POST_WIFI_MANAGER_BUFF_SIZE - pos, "%s%c" IPSTR "%c" IPSTR "%c" IPSTR "%c%d%c", ssid_sta, UNIT_SEPARATOR, IP2STR(&ip_info.ip), UNIT_SEPARATOR, IP2STR(&ip_info.netmask), UNIT_SEPARATOR, IP2STR(&ip_info.gw), UNIT_SEPARATOR, (int)urc, RECORD_SEPARATOR);
+        const char* hostname;
+        esp_netif_get_hostname(wifi_netif_sta, &hostname);
+        wifi_ap_record_t ap;
+        esp_wifi_sta_get_ap_info(&ap);
+        pos += snprintf(buf + pos, http_buffer_len - pos, "%s%c%s%c%s%c%d%c" IPSTR "%c" IPSTR "%c" IPSTR "%c%d%c", wifi_config_ap.ap.ssid, UNIT_SEPARATOR, hostname, UNIT_SEPARATOR, ssid_sta, UNIT_SEPARATOR, ap.rssi, UNIT_SEPARATOR, IP2STR(&ip_info.ip), UNIT_SEPARATOR, IP2STR(&ip_info.netmask), UNIT_SEPARATOR, IP2STR(&ip_info.gw), UNIT_SEPARATOR, (int)urc, RECORD_SEPARATOR);
         for (size_t i = 0; i < accessp_records_len; i++)
         {
             wifi_ap_record_t ap = accessp_records[i];
-            pos += snprintf(buf + pos, POST_WIFI_MANAGER_BUFF_SIZE - pos, "%s%c%d%c%d%c%d%c", ap.ssid, UNIT_SEPARATOR, ap.primary, UNIT_SEPARATOR, ap.rssi, UNIT_SEPARATOR, ap.authmode, RECORD_SEPARATOR);
-            if (pos >= POST_WIFI_MANAGER_BUFF_SIZE)
+            pos += snprintf(buf + pos, http_buffer_len - pos, "%s%c%d%c%d%c%d%c", ap.ssid, UNIT_SEPARATOR, ap.primary, UNIT_SEPARATOR, ap.rssi, UNIT_SEPARATOR, ap.authmode, RECORD_SEPARATOR);
+            if (pos >= http_buffer_len)
             {
                 ESP_LOGE(TAG, "Problems in handle_put_wifimanager: Buffer too small");
                 xSemaphoreGive(wifi_manager_aplist_mutex);
                 return ESP_FAIL;
             }
         }
+        urc=UpdateReasonCode::NO_CHANGE;
         xSemaphoreGive(wifi_manager_aplist_mutex);
         httpd_resp_set_type(req, "text/plain");
         httpd_resp_set_hdr(req, "Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
@@ -595,7 +563,7 @@ namespace wifimgr
         {
             wifi_manager_send_message(message_code_t::WM_ORDER_START_WIFI_SCAN, NULL);
         }
-        return ESP_OK;
+        return ret;
     }
 
     static const httpd_uri_t get_wifimanager = {
@@ -636,29 +604,27 @@ namespace wifimgr
             }
             switch (msg.code)
             {
-
             case message_code_t::WM_EVENT_SCAN_DONE:
             {
                 wifi_event_sta_scan_done_t *evt_scan_done = (wifi_event_sta_scan_done_t *)msg.param;
                 /* only check for AP if the scan is succesful */
                 if (evt_scan_done->status != 0)
                 {
-                    continue;
+                    break;
                 }
-                if (xSemaphoreTake(wifi_manager_aplist_mutex, portMAX_DELAY) != pdTRUE)
+                 if (xSemaphoreTake(wifi_manager_aplist_mutex, portMAX_DELAY) != pdTRUE)
                 {
                     ESP_LOGE(TAG, "could not get access to json mutex in wifi_scan");
-                    return;
+                    break;
                 }
-                /* As input param, it stores max AP number ap_records can hold. As output param, it receives the actual AP number this API returns.
-                 * As a consequence, ap_num MUST be reset to MAX_AP_NUM at every scan */
+                // As input param, it stores max AP number ap_records can hold. As output param, it receives the actual AP number this API returns.
+                // As a consequence, ap_num MUST be reset to MAX_AP_NUM at every scan */
                 accessp_records_len = MAX_AP_NUM;
                 ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&accessp_records_len, accessp_records));
                 xSemaphoreGive(wifi_manager_aplist_mutex);
                 free(evt_scan_done);
                 break;
             }
-
             case message_code_t::WM_ORDER_START_WIFI_SCAN:
             {
                 ESP_LOGD(TAG, "MESSAGE: ORDER_START_WIFI_SCAN");
@@ -679,7 +645,6 @@ namespace wifimgr
                 ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, false));
                 break;
             }
-
             case message_code_t::WM_ORDER_LOAD_AND_RESTORE_STA:
             {
                 ESP_LOGI(TAG, "MESSAGE: ORDER_LOAD_AND_RESTORE_STA");
@@ -733,7 +698,6 @@ namespace wifimgr
                 }
                 break;
             }
-
             case message_code_t::WM_EVENT_STA_DISCONNECTED:
             {
                 wifi_event_sta_disconnected_t *wifi_event_sta_disconnected = (wifi_event_sta_disconnected_t *)msg.param;
@@ -770,7 +734,7 @@ namespace wifimgr
                      * in case they typed a wrong password for instance. Here we simply clear the request bit and move on */
                     xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_STA_CONNECT_BIT);
                     xSemaphoreTake(wifi_manager_aplist_mutex, portMAX_DELAY);
-                    urc = update_reason_code_t::UPDATE_FAILED_ATTEMPT;
+                    urc = UpdateReasonCode::FAILED_ATTEMPT;
                     xSemaphoreGive(wifi_manager_aplist_mutex);
                 }
                 else if (uxBits & WIFI_MANAGER_REQUEST_DISCONNECT_BIT)
@@ -780,7 +744,7 @@ namespace wifimgr
                     xSemaphoreTake(wifi_manager_aplist_mutex, portMAX_DELAY);
                     ssid_sta[0] = '\0';
                     password_sta[0] = '\0';
-                    urc = update_reason_code_t::UPDATE_USER_DISCONNECT;
+                    urc = UpdateReasonCode::USER_DISCONNECT;
                     xSemaphoreGive(wifi_manager_aplist_mutex);
                     wifi_manager_save_sta_config();
                     wifi_manager_send_message(message_code_t::WM_ORDER_START_AP, NULL);
@@ -788,7 +752,7 @@ namespace wifimgr
                 else
                 {
                     xSemaphoreTake(wifi_manager_aplist_mutex, portMAX_DELAY);
-                    urc = update_reason_code_t::UPDATE_USER_DISCONNECT;
+                    urc = UpdateReasonCode::USER_DISCONNECT;
                     xSemaphoreGive(wifi_manager_aplist_mutex);
 
                     /* Start the timer that will try to restore the saved config */
@@ -827,7 +791,7 @@ namespace wifimgr
                 ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
 
                 /* start DNS */
-                start_dns_server();
+                //start_dns_server();
                 break;
             }
             case message_code_t::WM_ORDER_STOP_AP:
@@ -846,7 +810,7 @@ namespace wifimgr
                     esp_wifi_set_mode(WIFI_MODE_STA);
 
                     /* stop DNS */
-                     stop_dns_server();
+                     //stop_dns_server();
                 }
 
                 break;
@@ -873,11 +837,11 @@ namespace wifimgr
                 /* reset number of retries */
                 retries = 0;
                 xSemaphoreTake(wifi_manager_aplist_mutex, portMAX_DELAY);
-                urc = update_reason_code_t::UPDATE_CONNECTION_OK;
+                urc = UpdateReasonCode::CONNECTION_ESTABLISHED;
                 xSemaphoreGive(wifi_manager_aplist_mutex);
 
                 /* bring down DNS hijack */
-                stop_dns_server();
+                //stop_dns_server();
 
                 /* start the timer that will eventually shutdown the access point
                  * We check first that it's actually running because in case of a boot and restore connection
@@ -894,22 +858,20 @@ namespace wifimgr
                     }
                     else
                     {
-                        wifi_manager_send_message(message_code_t::WM_ORDER_STOP_AP, (void *)NULL);
+                        wifi_manager_send_message(message_code_t::WM_ORDER_STOP_AP, nullptr);
                     }
                 }
                 free(ip_event_got_ip);
                 break;
             }
-
             case message_code_t::WM_ORDER_DISCONNECT_STA:
             {
-                ESP_LOGI(TAG, "MESSAGE: ORDER_DISCONNECT_STA");
-
+                ESP_LOGI(TAG, "MESSAGE: ORDER_DISCONNECT_STA, wait 2000ms...");
+                vTaskDelay(pdMS_TO_TICKS(2000)); //warte 200ms, um die Beantwortung des Requests noch zu ermöglichen
                 /* precise this is coming from a user request */
                 xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_DISCONNECT_BIT);
-
-                /* order wifi discconect */
                 ESP_ERROR_CHECK(esp_wifi_disconnect());
+                erase_sta_config();
                 break;
             }
             default:
@@ -918,8 +880,10 @@ namespace wifimgr
         }
     }
 
-    esp_err_t wifimanager_start()
+    esp_err_t InitAndRun(bool resetStoredConnection, uint8_t* http_request_response_buffer, size_t http_request_response_buffer_len)
     {
+        http_buffer=http_request_response_buffer;
+        http_buffer_len=http_request_response_buffer_len;
         if (nvs_sync_mutex != nullptr || wifi_manager_aplist_mutex != nullptr)
         {
             ESP_LOGE(TAG, "wifi manager already started");
@@ -933,8 +897,8 @@ namespace wifimgr
         nvs_sync_mutex = xSemaphoreCreateMutex();
         wifi_manager_aplist_mutex = xSemaphoreCreateMutex();
         wifi_manager_queue = xQueueCreate(3, sizeof(queue_message));
-        wifi_manager_retry_timer = xTimerCreate(NULL, pdMS_TO_TICKS(WIFI_MANAGER_RETRY_TIMER), pdFALSE, (void *)0, wifi_manager_timer_retry_cb);
-        wifi_manager_shutdown_ap_timer = xTimerCreate(NULL, pdMS_TO_TICKS(WIFI_MANAGER_SHUTDOWN_AP_TIMER), pdFALSE, (void *)0, wifi_manager_timer_shutdown_ap_cb);
+        wifi_manager_retry_timer = xTimerCreate("retry timer", pdMS_TO_TICKS(WIFI_MANAGER_RETRY_TIMER), pdFALSE, (void *)0, wifi_manager_timer_retry_cb);
+        wifi_manager_shutdown_ap_timer = xTimerCreate("shutdown_ap_timer", pdMS_TO_TICKS(WIFI_MANAGER_SHUTDOWN_AP_TIMER), pdFALSE, (void *)0, wifi_manager_timer_shutdown_ap_cb);
         wifi_manager_event_group = xEventGroupCreate();
         if (!nvs_sync_mutex || !wifi_manager_aplist_mutex || !wifi_manager_queue || !wifi_manager_retry_timer || !wifi_manager_shutdown_ap_timer || !wifi_manager_event_group)
         {
@@ -1006,7 +970,14 @@ namespace wifimgr
         /* by default the mode is STA because wifi_manager will not start the access point unless it has to! */
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         ESP_ERROR_CHECK(esp_wifi_start());
-        wifi_manager_send_message(message_code_t::WM_ORDER_LOAD_AND_RESTORE_STA, NULL);
+        if(resetStoredConnection){
+            erase_sta_config();
+            wifi_manager_send_message(message_code_t::WM_ORDER_START_AP, nullptr);
+        }
+        else{
+            wifi_manager_send_message(message_code_t::WM_ORDER_LOAD_AND_RESTORE_STA, nullptr);
+        }
+        
         xTaskCreate(&wifi_manager_task, "wifi_manager", 4096, NULL, WIFI_MANAGER_TASK_PRIORITY, &wifi_manager_task_handle);
         ESP_LOGI(TAG, "Network Manager successfully started");
         return ESP_OK;

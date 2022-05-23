@@ -1,6 +1,34 @@
 #pragma once
 #include <stdint.h>
 #include <array>
+
+#define ALL4  __attribute__ ((aligned (16)))
+
+#define BREAK_ON_ERROR(x, format, ...) do {                               \
+        esp_err_t err_rc_ = (x);                                                                \
+        if (unlikely(err_rc_ != ESP_OK)) {                                                      \
+            ESP_LOGE(TAG, "%s(%d): " format, __FUNCTION__, __LINE__, ##__VA_ARGS__);        \
+            ret = err_rc_;                                                                      \
+            break;                                                                      \
+        }                                                                                       \
+    } while(0)
+
+#define GOTO_ERROR_ON_ERROR(x, format, ...) do {                               \
+        esp_err_t err_rc_ = (x);                                                                \
+        if (unlikely(err_rc_ != ESP_OK)) {                                                      \
+            ESP_LOGE(TAG, "%s(%d): " format, __FUNCTION__, __LINE__, ##__VA_ARGS__);        \
+            ret = err_rc_;                                                                      \
+            goto error;                                                                      \
+        }                                                                                       \
+    } while(0)
+
+#define RETURN_FAIL_ON_FALSE(a, format, ...) do {                             \
+        if (unlikely(!(a))) {                                                                   \
+            ESP_LOGE(TAG, "%s(%d): " format, __FUNCTION__, __LINE__, ##__VA_ARGS__);        \
+            return ESP_FAIL;                                                                    \
+        }                                                                                       \
+    } while(0)
+
 typedef uint8_t u8;
 typedef uint16_t u16;
 typedef uint32_t u32;
