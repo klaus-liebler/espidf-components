@@ -69,7 +69,7 @@ namespace CCS811
       }
       else
       {
-        ESP_LOGE(TAG, "ping failed (VDD/GND connected? SDA/SCL connected?)");
+        ESP_LOGW(TAG, "CSS811 not found");
       }
       goto abort_begin;
     }
@@ -130,7 +130,7 @@ namespace CCS811
       goto abort_begin;
     }
     _appversion = app_version[0] * 256 + app_version[1];
-
+    vTaskDelay(pdMS_TO_TICKS(20));
     // Switch CCS811 from boot mode into app mode
     ok = i2cwrite(CCS811_APP_START, 0, app_start);
     if (!ok)
@@ -622,3 +622,4 @@ namespace CCS811
     return I2C::ReadReg(this->i2c_num, (uint8_t)this->address_7bit, regaddr, buf, count) == ESP_OK;
   }
 }
+#undef TAG

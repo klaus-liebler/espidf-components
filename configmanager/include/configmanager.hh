@@ -189,7 +189,8 @@ namespace configmanager
         }
     response:
         pos=0;
-        nvs_iterator_t it = nvs_entry_find(NVS_PARTITION, NVS_NAMESPACE, NVS_TYPE_STR);
+        nvs_iterator_t it;
+        nvs_entry_find(NVS_PARTITION, NVS_NAMESPACE, NVS_TYPE_STR, &it);
         while (it != NULL) {
                 nvs_entry_info_t info;
                 nvs_entry_info(it, &info);
@@ -205,9 +206,9 @@ namespace configmanager
                     
                     goto release_resources;
                 }
-                it = nvs_entry_next(it);
+                nvs_entry_next(&it);
         }
-        it = nvs_entry_find(NVS_PARTITION, NVS_NAMESPACE, NVS_TYPE_I32);
+        nvs_entry_find(NVS_PARTITION, NVS_NAMESPACE, NVS_TYPE_I32, &it);
         while (it != NULL) {
                 nvs_entry_info_t info;
                 nvs_entry_info(it, &info);
@@ -223,7 +224,7 @@ namespace configmanager
                     
                     goto release_resources;
                 }
-                it = nvs_entry_next(it);
+                nvs_entry_next(&it);
         }   
 release_resources:     
         nvs_close(nvsHandle);

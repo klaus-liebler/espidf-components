@@ -21,7 +21,9 @@
 #include <driver/i2c.h>
 #include <i2c.hh>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include "PD_UFP.h"
+
 #define TAG "USBPD"
 
 constexpr int t_PD_POLLING = 100;

@@ -4,6 +4,11 @@
 
 #define ALL4  __attribute__ ((aligned (16)))
 
+#define FLASH_FILE(x) \
+extern const uint8_t x##_start[] asm("_binary_" #x "_start");\
+extern const uint8_t x##_end[] asm("_binary_" #x "_end");\
+extern const size_t  x##_size asm(#x"_length");
+
 #define BREAK_ON_ERROR(x, format, ...) do {                               \
         esp_err_t err_rc_ = (x);                                                                \
         if (unlikely(err_rc_ != ESP_OK)) {                                                      \

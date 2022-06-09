@@ -5,10 +5,10 @@
 #include <unistd.h>
 #include <cstring>
 #include <algorithm>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_system.h"
-#include "esp_log.h"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <esp_system.h>
+#include <esp_log.h>
 #include <driver/gpio.h>
 #include <driver/dac.h>
 #include <driver/i2s.h>
@@ -17,9 +17,9 @@
 #define MINIMP3_NONSTANDARD_BUT_LOGICAL
 #define MINIMP3_IMPLEMENTATION
 #include "minimp3.h"
-#include <esp_log.h>
 
 #define TAG "MP3"
+
 
 namespace MP3
 {
@@ -68,20 +68,32 @@ public:
     
     esp_err_t Play(const uint8_t *file, size_t fileLen)
     {
-        if(mode==PlayerMode::UNINITIALIZED) return ESP_FAIL;
+        if(mode==PlayerMode::UNINITIALIZED){
+            ESP_LOGE(TAG, "MP3 player not initialized");
+            return ESP_FAIL;
+        }
         i2s_zero_dma_buffer(i2s_num);
         this->file = file;
         this->fileLen = fileLen;
         // frameStart=0;
         frameStart = FindSyncWordOnAnyPosition(0);
-
+        if(frameStart<0){
+            ESP_LOGE(TAG, "No synch word found in file!");
+            this->file = nullptr;
+            this->fileLen = 0;
+            return ESP_FAIL;
+        }
+        mp3dec_init(decoder);
         ESP_LOGI(TAG, "Successfully initialized a new sound play task. File=%p; FileLen=%zu; FrameStart=%d;", file, fileLen, frameStart);
         return ESP_OK;
     }
 
     esp_err_t Stop()
     {
-        if(mode==PlayerMode::UNINITIALIZED) return ESP_FAIL;
+        if(mode==PlayerMode::UNINITIALIZED){
+            ESP_LOGE(TAG, "MP3 player not initialized");
+            return ESP_FAIL;
+        }
         i2s_zero_dma_buffer(i2s_num);
         this->file = nullptr;
         this->fileLen = 0;
@@ -89,14 +101,13 @@ public:
         return ESP_OK;
     }
 
-    bool SetGain(float f)
+    void SetGain(float f)
     {
         if (f > 4.0)
             f = 4.0;
         if (f < 0.0)
             f = 0.0;
         gainF2P6 = (uint8_t)(f * (1 << 6));
-        return true;
     }
 
     void AmplifyAndClampAndNormalizeForDAC(int16_t& s)
@@ -115,6 +126,10 @@ public:
 
     esp_err_t Loop()
     {
+        if(mode==PlayerMode::UNINITIALIZED){
+            ESP_LOGE(TAG, "MP3 player not initialized");
+            return ESP_FAIL;
+        }
         if (!file)
         {
             vTaskDelay(pdMS_TO_TICKS(50));
@@ -132,11 +147,14 @@ public:
             return ESP_OK;
         }
         int bytesLeft = fileLen - frameStart;
-        mp3dec_frame_info_t info;
+        mp3dec_frame_info_t info={};
         int64_t now = esp_timer_get_time();
+        
         int samples = mp3dec_decode_frame(decoder, file + frameStart, bytesLeft, this->outBuffer, &info);
         timeCalc += esp_timer_get_time() - now;
+        
         this->frameStart += info.frame_bytes;
+            
         if(this->currentSampleRateHz!=info.hz){
             i2s_set_sample_rates(i2s_num, info.hz);
             ESP_LOGI(TAG, "Change sample rate to %d Hz", info.hz);
@@ -148,7 +166,6 @@ public:
             return ESP_OK;
         }
         if(info.channels==1){
-            //ESP_LOGI(TAG, "frameStart=%d; frame_bytes=%d; channels=%d samples=%d", frameStart, info.frame_bytes, info.channels, samples); // frameStart=82672; frame_bytes=418; samples=1152
             for (int i = samples-1; i >=0; i--)
             {
                 int16_t l = outBuffer[i];
@@ -190,6 +207,7 @@ public:
 
     esp_err_t InitExternalI2SDAC(i2s_port_t i2s_num, gpio_num_t bck, gpio_num_t ws, gpio_num_t data)
     {
+        ESP_LOGI(TAG, "Initializing I2S_NUM_0 for internal DAC");
         this->i2s_num = i2s_num;
         this->mode = PlayerMode::UNINITIALIZED;
         mp3dec_init(decoder);
@@ -198,12 +216,18 @@ public:
         i2s_config.sample_rate = 44100;
         i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
         i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT; // 2-channels
-        i2s_config.communication_format = I2S_COMM_FORMAT_STAND_MSB;
-        i2s_config.intr_alloc_flags = 0; // Default interrupt priority
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
+        i2s_config.communication_format = (i2s_comm_format_t) I2S_COMM_FORMAT_STAND_MSB;
         i2s_config.dma_desc_num = 8;
         i2s_config.dma_frame_num = 64; // MP3::SAMPLES_PER_FRAME/2; //Max 1024
+#else
+        i2s_config.communication_format = (i2s_comm_format_t) I2S_COMM_FORMAT_I2S_MSB;
+        i2s_config.dma_buf_count = 4,
+        i2s_config.dma_buf_len = 128,
+#endif
+        i2s_config.intr_alloc_flags = 0; // Default interrupt priority
         i2s_config.use_apll = false;
-        i2s_config.fixed_mclk = -1;
+        i2s_config.fixed_mclk = 0;
         i2s_config.tx_desc_auto_clear = false; // Auto clear tx descriptor on underflow
 
         ESP_ERROR_CHECK(i2s_driver_install(i2s_num, &i2s_config, 0, NULL));
@@ -228,10 +252,16 @@ public:
         i2s_config.sample_rate = 44100;
         i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
         i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-        i2s_config.communication_format = I2S_COMM_FORMAT_STAND_MSB; //"STAND_I2S" leads to quiet speaker. This setting is choosen in https://github.com/earlephilhower/ESP8266Audio/blob/master/src/AudioOutputI2S.cpp as well
-        i2s_config.intr_alloc_flags = 0;
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
+        i2s_config.communication_format = (i2s_comm_format_t) I2S_COMM_FORMAT_STAND_MSB;
         i2s_config.dma_desc_num = 8;
-        i2s_config.dma_frame_num = 64;
+        i2s_config.dma_frame_num = 64; // MP3::SAMPLES_PER_FRAME/2; //Max 1024
+#else
+        i2s_config.communication_format = (i2s_comm_format_t) I2S_COMM_FORMAT_I2S_MSB;
+        i2s_config.dma_buf_count = 4,
+        i2s_config.dma_buf_len = 128,
+#endif
+        i2s_config.intr_alloc_flags = 0;
         i2s_config.use_apll = false;
         i2s_config.fixed_mclk = 0;
         i2s_config.tx_desc_auto_clear = false; // Auto clear tx descriptor on underflow

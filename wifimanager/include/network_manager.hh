@@ -87,7 +87,7 @@ namespace wifimgr
     constexpr wifi_ps_type_t DEFAULT_STA_POWER_SAVE = WIFI_PS_NONE;
 
     /* @brief indicate that the ESP32 is currently connected. */
-    constexpr int WIFI_MANAGER_WIFI_CONNECTED_BIT = BIT0;
+    constexpr int BIT_IS_CONNECTED_TO_AP = BIT0;
 
     constexpr int WIFI_MANAGER_AP_STA_CONNECTED_BIT = BIT1;
 
@@ -293,7 +293,7 @@ namespace wifimgr
                 *wifi_event_sta_disconnected = *((wifi_event_sta_disconnected_t *)event_data);
 
                 /* if a DISCONNECT message is posted while a scan is in progress this scan will NEVER end, causing scan to never work again. For this reason SCAN_BIT is cleared too */
-                xEventGroupClearBits(wifi_manager_event_group, WIFI_MANAGER_WIFI_CONNECTED_BIT | WIFI_MANAGER_SCAN_BIT);
+                xEventGroupClearBits(wifi_manager_event_group, BIT_IS_CONNECTED_TO_AP | WIFI_MANAGER_SCAN_BIT);
 
                 /* post disconnect event with reason code */
                 wifi_manager_send_message(message_code_t::WM_EVENT_STA_DISCONNECTED, (void *)wifi_event_sta_disconnected);
@@ -363,7 +363,7 @@ namespace wifimgr
             case IP_EVENT_STA_GOT_IP:
             {
                 ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP");
-                xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_WIFI_CONNECTED_BIT);
+                xEventGroupSetBits(wifi_manager_event_group, BIT_IS_CONNECTED_TO_AP);
                 ip_event_got_ip_t *ip_event_got_ip = (ip_event_got_ip_t *)malloc(sizeof(ip_event_got_ip_t));
                 *ip_event_got_ip = *((ip_event_got_ip_t *)event_data);
                 wifi_manager_send_message(message_code_t::WM_EVENT_STA_GOT_IP, (void *)(ip_event_got_ip));
@@ -671,13 +671,13 @@ namespace wifimgr
                 {
                     xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_STA_CONNECT_BIT);
                 }
-                else if (msg.code == message_code_t::WM_ORDER_CONNECT_STA_RESTORE_CONNECTION)
+                else if (msg.code == message_code_t::WM_ORDER_CONNECT_STA_RESTORE_CONNECTION || msg.code == message_code_t::WM_ORDER_CONNECT_STA_AUTO_RECONNECT)
                 {
                     xEventGroupSetBits(wifi_manager_event_group, WIFI_MANAGER_REQUEST_RESTORE_STA_BIT);
                 }
 
                 uxBits = xEventGroupGetBits(wifi_manager_event_group);
-                if (!(uxBits & WIFI_MANAGER_WIFI_CONNECTED_BIT))
+                if (!(uxBits & BIT_IS_CONNECTED_TO_AP))
                 {
                     strcpy((char *)wifi_config_sta.sta.ssid, ssid_sta);
                     strcpy((char *)wifi_config_sta.sta.password, password_sta);
@@ -803,7 +803,7 @@ namespace wifimgr
                 /* before stopping the AP, we check that we are still connected. There's a chance that once the timer
                  * kicks in, for whatever reason the esp32 is already disconnected.
                  */
-                if (uxBits & WIFI_MANAGER_WIFI_CONNECTED_BIT)
+                if (uxBits & BIT_IS_CONNECTED_TO_AP)
                 {
 
                     /* set to STA only */
