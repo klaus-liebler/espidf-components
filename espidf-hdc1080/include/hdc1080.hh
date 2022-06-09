@@ -49,6 +49,12 @@ namespace hdc1080{
                 ReInit();
                 return ErrorCode::OK;
             }
+
+            ErrorCode ReadOut(float &humidity, float &temperature){
+                humidity=this->h;
+                temperature=this->t;
+                return ErrorCode::OK;
+            }
         private:
            
            TEMPRESOLUTION tempRes{TEMPRESOLUTION::_14bit};

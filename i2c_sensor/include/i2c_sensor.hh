@@ -3,6 +3,8 @@
 #include <errorcodes.hh>
 #include <driver/i2c.h>
 #include <i2c.hh>
+#include <esp_log.h>
+#define TAG "sensor"
 
 
 class I2CSensor{
@@ -18,7 +20,7 @@ class I2CSensor{
 
     };
     private:
-        int64_t nextAction{INT64_MAX};
+        int64_t nextAction{0};
         I2CSensor::STATE state{STATE::INITIAL};
     protected:
         i2c_port_t i2c_num;
@@ -33,10 +35,12 @@ class I2CSensor{
     public:
 
     virtual bool HasValidData(){
+        
         return state == STATE::READOUT || state == STATE::RETRIGGERED;
     }
 
     ErrorCode Loop(int64_t currentMs){
+        if(currentMs<nextAction) return ErrorCode::OK;
         esp_err_t e;
         int64_t wait{0};
         switch (state)
@@ -44,6 +48,7 @@ class I2CSensor{
         case STATE::INITIAL:
             if(ESP_OK!= I2C::IsAvailable(i2c_num, address_7bit)){
                 state = STATE::ERROR_NOT_FOUND;
+                ESP_LOGE(TAG, "state = STATE::ERROR_NOT_FOUND; return ErrorCode::DEVICE_NOT_RESPONDING");
                 return ErrorCode::DEVICE_NOT_RESPONDING;
             }
             state=STATE::FOUND;
@@ -52,6 +57,7 @@ class I2CSensor{
             e=Initialize(wait);
             if(e!=ESP_OK){
                 state = STATE::ERROR_COMMUNICATION;
+                 ESP_LOGE(TAG, "state = STATE::ERROR_COMMUNICATION; return ErrorCode::DEVICE_NOT_RESPONDING");
                 return ErrorCode::DEVICE_NOT_RESPONDING;
             }
             nextAction=currentMs+wait;
@@ -59,27 +65,32 @@ class I2CSensor{
             break;
         case STATE::INITIALIZED:
         case STATE::READOUT:
-            if(currentMs<nextAction) return ErrorCode::OK;
             e=Trigger(wait);
             if(e!=ESP_OK){
                 state = STATE::ERROR_COMMUNICATION;
+                ESP_LOGE(TAG, "state = STATE::ERROR_COMMUNICATION;; return ErrorCode::DEVICE_NOT_RESPONDING");
                 return ErrorCode::DEVICE_NOT_RESPONDING;
             }
+            nextAction=currentMs+wait;
             state=state==STATE::INITIALIZED?STATE::TRIGGERED:STATE::RETRIGGERED;
+            
             break;
         case STATE::TRIGGERED:
-            if(currentMs<nextAction) return ErrorCode::OK;
+        case STATE::RETRIGGERED:
             e=Readout(wait);
             if(e!=ESP_OK){
                 state = STATE::ERROR_COMMUNICATION;
                 return ErrorCode::DEVICE_NOT_RESPONDING;
             }
+            nextAction=currentMs+wait;
             state=STATE::READOUT;
             break;   
         default:
             break;
         }
+        ESP_LOGD(TAG, "New state: %d, next action %d", (int)state, (int)nextAction);
         return ErrorCode::OK;
 
     }
 };
+#undef TAG
