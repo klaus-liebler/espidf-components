@@ -33,9 +33,6 @@ namespace wifimgr
 {
     /**
      * @brief Defines the maximum number of access points that can be scanned.
-     *
-     * To save memory and avoid nasty out of memory errors,
-     * we can limit the number of APs detected in a wifi scan.
      */
     constexpr size_t MAX_AP_NUM = 15;
     /**
@@ -715,7 +712,7 @@ namespace wifimgr
                  *  If WIFI_MANAGER_REQUEST_STA_CONNECT_BIT is set, We consider it's a client that requested the connection.
                  *    When SYSTEM_EVENT_STA_DISCONNECTED is posted, it's probably a password/something went wrong with the handshake.
                  *
-                 *  If WIFI_MANAGER_REQUEST_STA_CONNECT_BIT is set, it's a disconnection that was ASKED by the client (clicking disconnect in the app)
+                 *  If WIFI_MANAGER_REQUEST_DISCONNECT_BIT is set, it's a disconnection that was ASKED by the client (clicking disconnect in the app)
                  *    When SYSTEM_EVENT_STA_DISCONNECTED is posted, saved wifi is erased from the NVS memory.
                  *
                  *  If WIFI_MANAGER_REQUEST_STA_CONNECT_BIT and WIFI_MANAGER_REQUEST_STA_CONNECT_BIT are NOT set, it's a lost connection

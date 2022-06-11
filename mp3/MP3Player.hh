@@ -266,16 +266,14 @@ public:
         i2s_config.fixed_mclk = 0;
         i2s_config.tx_desc_auto_clear = false; // Auto clear tx descriptor on underflow
 
-        ESP_ERROR_CHECK(i2s_driver_install(i2s_num, &i2s_config, 0, NULL));
+        ESP_ERROR_CHECK(i2s_driver_install(i2s_num, &i2s_config, 0, nullptr));
         ESP_LOGI(TAG, "i2s_driver_install");
-        ESP_ERROR_CHECK(i2s_set_pin(i2s_num, NULL));
+        ESP_ERROR_CHECK(i2s_set_pin(i2s_num, nullptr));
         ESP_LOGI(TAG, "i2s_set_pin");
-        ESP_ERROR_CHECK(i2s_set_dac_mode(I2S_DAC_CHANNEL_BOTH_EN));
+        ESP_ERROR_CHECK(i2s_set_dac_mode(I2S_DAC_CHANNEL_RIGHT_EN));
         ESP_LOGI(TAG, "i2s_set_dac_mode");
         ESP_ERROR_CHECK(i2s_set_sample_rates(i2s_num, 44100));
         ESP_LOGI(TAG, "i2s_set_sample_rates");
-        dac_output_disable(DAC_CHANNEL_2);
-        gpio_reset_pin(GPIO_NUM_26);
         this->mode = PlayerMode::INTERNAL_DAC;
         return ESP_OK;
     }
