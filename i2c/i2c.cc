@@ -7,15 +7,21 @@
 
 static const char *TAG = "I2C_DEV";
 
-SemaphoreHandle_t *I2C::locks ={0};
+SemaphoreHandle_t I2C::locks[I2C_NUM_MAX];
 
-esp_err_t I2C::Init()
+esp_err_t I2C::Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda)
 {
-    I2C::locks = new SemaphoreHandle_t[I2C_NUM_MAX];
-    for (int i = 0; i < I2C_NUM_MAX; i++)
-    {
-        I2C::locks[i] = xSemaphoreCreateMutex();
-    }
+    i2c_config_t conf;
+    conf.mode = I2C_MODE_MASTER;
+    conf.sda_io_num = sda;
+    conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
+    conf.scl_io_num = scl;
+    conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
+    conf.master.clk_speed = 100000;
+    conf.clk_flags=0;
+    ESP_ERROR_CHECK(i2c_param_config(port, &conf));
+    ESP_ERROR_CHECK(i2c_driver_install(port, conf.mode, 0, 0, 0));
+    I2C::locks[(int)port] = xSemaphoreCreateMutex();
     return ESP_OK;
 }
 

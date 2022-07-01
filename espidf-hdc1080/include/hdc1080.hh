@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <cmath>
 #include <i2c_sensor.hh>
 
 namespace hdc1080{

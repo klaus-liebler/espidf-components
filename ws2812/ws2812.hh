@@ -19,22 +19,25 @@ private:
     static constexpr size_t  LED_DMA_BUFFER_SIZE =(LEDSIZE * 24 /*data bits per LED*/ +48 /*reset pulse*/) * 4 /*spi bits per data bit*/ / 8 /*bits per byte*/;
     uint16_t* buffer;
     uint32_t table[LEDSIZE];
+    bool dirty{true};
     spi_device_handle_t spi_device_handle=NULL;
 
 public:
-    WS2812_Strip(){
-        
-    }
+    WS2812_Strip(){}
 
     esp_err_t SetPixel(size_t index, CRGB color, bool refresh=false){
         index=index%LEDSIZE;
-        this->table[index]=color.raw32 ;
-        if(refresh) this->Refresh(1000);
+        if((this->table[index])!=(color.raw32)){
+            LOGI(TAG, "Set Index %d from %d to %d", index, table[index], color.raw32);
+            this->table[index]=color.raw32;
+            this->dirty=true;
+        }
+        this->Refresh(1000, refresh);
         return ESP_OK;
     }
 
 
-    esp_err_t Refresh(uint32_t timeout_ms){
+    esp_err_t Refresh(uint32_t timeout_ms, bool forceRefreshEvenIfNotNecessary=false){
         static const uint16_t LedBitPattern[16] = {
             0x8888,
             0x8C88,
@@ -53,6 +56,9 @@ public:
             0xC8CC,
             0xCCCC
         };
+        if(!dirty && !forceRefreshEvenIfNotNecessary){
+            return ESP_OK;
+        }
         uint32_t i;
         int n = 0;
         for (i = 0; i < LEDSIZE; i++) {
@@ -76,7 +82,9 @@ public:
         t.length = LED_DMA_BUFFER_SIZE * 8; //length is in bits
         t.tx_buffer = buffer;
 
+        LOGI(TAG, "Refreshing RGB-LED");
         ESP_ERROR_CHECK(spi_device_transmit(this->spi_device_handle, &t));
+        dirty=false;
         return ESP_OK;
    
     }
@@ -84,6 +92,7 @@ public:
     esp_err_t Clear(uint32_t timeout_ms){
         CRGB black = CRGB::Black;
         memset(table, black.raw32, LEDSIZE*sizeof(uint32_t));
+        dirty=true;
         return Refresh(timeout_ms);
     }
    

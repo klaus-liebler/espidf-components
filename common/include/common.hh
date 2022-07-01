@@ -18,6 +18,22 @@ extern const size_t  x##_size asm(#x"_length");
         }                                                                                       \
     } while(0)
 
+#define RETURN_ON_ERROR(x) do {                                       \
+        esp_err_t err_rc_ = (x);                                                                \
+        if (unlikely(err_rc_ != ESP_OK)) {                                                      \
+            ESP_LOGE(TAG, "%s(%d): Function returned %s!", __FUNCTION__, __LINE__, esp_err_to_name(err_rc_));        \
+            return err_rc_;                                                                     \
+        }                                                                                       \
+    } while(0)
+
+#define RETURN_ON_ERRORCODE(x) do {                                       \
+        ErrorCode err_rc_ = (x);                                                                \
+        if (err_rc_ != ErrorCode::OK) {                                                      \
+            ESP_LOGE(TAG, "%s(%d): Function returned %d!", __FUNCTION__, __LINE__, (int)err_rc_);        \
+            return err_rc_;                                                                     \
+        }                                                                                       \
+    } while(0)
+
 #define GOTO_ERROR_ON_ERROR(x, format, ...) do {                               \
         esp_err_t err_rc_ = (x);                                                                \
         if (unlikely(err_rc_ != ESP_OK)) {                                                      \
@@ -108,3 +124,5 @@ void WriteUInt16(uint16_t value, uint8_t *message, uint32_t offset);
 uint32_t ParseUInt32(const uint8_t * const message, uint32_t offset);
 
 void WriteUInt32(uint32_t value, uint8_t *message, uint32_t offset);
+
+float ParseFloat32(const uint8_t * const message, uint32_t offset);

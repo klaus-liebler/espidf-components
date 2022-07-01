@@ -1,6 +1,6 @@
 #include <pidcontroller.hh>
 #include "esp_log.h"
-constexpr const char *TAG = "plcmanager";
+constexpr const char *TAG = "pidcontroller";
 
 PIDController::PIDController(
       double* input,
