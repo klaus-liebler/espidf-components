@@ -85,7 +85,7 @@ public:
     ADS1115(const i2c_port_t i2c_port, const uint8_t address);
     ~ADS1115() {}
     // set configuration
-    esp_err_t Init(ads1115_sps_t dr, TickType_t *howLongToWaitForResult);
+    esp_err_t Init(ads1115_sps_t dr, int64_t *howLongToWaitForResultMilliseconds);
     esp_err_t TriggerMeasurement(ads1115_mux_t mux);
     esp_err_t GetRaw(int16_t *val);    // get voltage in bits
     esp_err_t GetVoltage(float *val); // get voltage in volts

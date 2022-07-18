@@ -28,7 +28,7 @@ public:
     esp_err_t SetPixel(size_t index, CRGB color, bool refresh=false){
         index=index%LEDSIZE;
         if((this->table[index])!=(color.raw32)){
-            LOGI(TAG, "Set Index %d from %d to %d", index, table[index], color.raw32);
+            LOGD(TAG, "Set Index %d from %d to %d", index, table[index], color.raw32);
             this->table[index]=color.raw32;
             this->dirty=true;
         }
@@ -82,7 +82,7 @@ public:
         t.length = LED_DMA_BUFFER_SIZE * 8; //length is in bits
         t.tx_buffer = buffer;
 
-        LOGI(TAG, "Refreshing RGB-LED");
+        LOGD(TAG, "Refreshing RGB-LED");
         ESP_ERROR_CHECK(spi_device_transmit(this->spi_device_handle, &t));
         dirty=false;
         return ESP_OK;

@@ -18,6 +18,9 @@
 #define MINIMP3_IMPLEMENTATION
 #include "minimp3.h"
 
+//https://voicemaker.in/
+//Neural TTS, German, Katja, 24000Hz, VoiceSpeed+20%
+
 #define TAG "MP3"
 
 namespace MP3
@@ -208,17 +211,21 @@ namespace MP3
 
             this->frameStart += info.frame_bytes;
 
-            if (this->currentSampleRateHz != info.hz)
-            {
-                i2s_set_sample_rates(i2s_num, info.hz);
-                ESP_LOGI(TAG, "Change sample rate to %d Hz", info.hz);
-                this->currentSampleRateHz = info.hz;
-            }
-
             if (samples == 0)
             {
                 return ESP_OK;
             }
+
+            if (this->currentSampleRateHz != info.hz)
+            {
+                ESP_LOGI(TAG, "Change sample rate to %d Hz", info.hz);
+                if(i2s_set_sample_rates(i2s_num, info.hz)!=ESP_OK){
+                    ESP_LOGI(TAG, "Changing sample rate to %d was not successful. Trying to set it to 22050Hz.", info.hz);
+                    i2s_set_sample_rates(i2s_num, 22050);
+                }
+                this->currentSampleRateHz = info.hz;
+            }
+
             if (info.channels == 1)
             {
                 for (int i = samples - 1; i >= 0; i--)
@@ -325,13 +332,9 @@ namespace MP3
             i2s_config.tx_desc_auto_clear = false; // Auto clear tx descriptor on underflow
 
             ESP_ERROR_CHECK(i2s_driver_install(i2s_num, &i2s_config, 0, nullptr));
-            ESP_LOGI(TAG, "i2s_driver_install");
             ESP_ERROR_CHECK(i2s_set_pin(i2s_num, nullptr));
-            ESP_LOGI(TAG, "i2s_set_pin");
             ESP_ERROR_CHECK(i2s_set_dac_mode(I2S_DAC_CHANNEL_RIGHT_EN));
-            ESP_LOGI(TAG, "i2s_set_dac_mode");
-            ESP_ERROR_CHECK(i2s_set_sample_rates(i2s_num, 44100));
-            ESP_LOGI(TAG, "i2s_set_sample_rates");
+            ESP_ERROR_CHECK(i2s_set_sample_rates(i2s_num, 24000));
             this->output = Output::INTERNAL_DAC;
             return ESP_OK;
         }

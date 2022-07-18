@@ -10,57 +10,20 @@
 class cRotaryEncoder{
 public:
     pcnt_unit_handle_t pcnt_unit;
-	gpio_num_t phase_a_gpio_num;     /*!< Phase A GPIO number */
-    gpio_num_t phase_b_gpio_num;     /*!< Phase B GPIO number */
-	int minCount;
-	int maxCount;
-	
-	
+	gpio_num_t phase_a_gpio_num;
+    gpio_num_t phase_b_gpio_num;
+	int16_t minCount;
+	int16_t maxCount;
 	
 	esp_err_t Init();
 
-
-    /**
-     * @brief Start rotary encoder
-     *
-     * @param encoder Rotary encoder handle
-     * @return
-     *      - ESP_OK: Start rotary encoder successfully
-     *      - ESP_FAIL: Start rotary encoder failed because of other error
-     */
     esp_err_t Start();
 
-    /**
-     * @brief Stop rotary encoder
-     *
-     * @param encoder Rotary encoder handle
-     * @return
-     *      - ESP_OK: Stop rotary encoder successfully
-     *      - ESP_FAIL: Stop rotary encoder failed because of other error
-     */
     esp_err_t Stop();
 
-
-    /**
-     * @brief Get rotary encoder counter value
-     *
-     * @param encoder Rotary encoder handle
-     * @return Current counter value (the sign indicates the direction of rotation)
-     */
     esp_err_t GetValue(int *value);
 
-	/**
-	 * @brief Create rotary encoder instance for EC11
-	 *
-	 * @param config Rotary encoder configuration
-	 * @param ret_encoder Returned rotary encoder handle
-	 * @return
-	 *      - ESP_OK: Create rotary encoder instance successfully
-	 *      - ESP_ERR_INVALID_ARG: Create rotary encoder instance failed because of some invalid argument
-	 *      - ESP_ERR_NO_MEM: Create rotary encoder instance failed because there's no enough capable memory
-	 *      - ESP_FAIL: Create rotary encoder instance failed because of other error
-	 */
-	cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, int minCount, int maxCount);
+	cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, int16_t minCount=INT16_MIN, int16_t maxCount=INT16_MAX);
 };
 
 

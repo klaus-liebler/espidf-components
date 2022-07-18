@@ -12,13 +12,12 @@ static const char *TAG = "ADS1115";
 
 ADS1115::ADS1115(i2c_port_t i2c_port, uint8_t address) : i2c_port(i2c_port), address(address){}
 
-constexpr TickType_t SPSindex2WaitingTime[] = {125/portTICK_PERIOD_MS+1, 63/portTICK_PERIOD_MS+1, 32/portTICK_PERIOD_MS+1,
-16/portTICK_PERIOD_MS+1, 8/portTICK_PERIOD_MS+1, 4/portTICK_PERIOD_MS+1, 3/portTICK_PERIOD_MS+1, 2/portTICK_PERIOD_MS+1};
+constexpr uint8_t SPSindex2WaitingTime[] = {125, 63, 32, 16, 8, 4, 3, 2};
 
-esp_err_t ADS1115::Init(ads1115_sps_t sps, TickType_t *howLongToWaitForResult)
+esp_err_t ADS1115::Init(ads1115_sps_t sps, int64_t *howLongToWaitForResultMilliseconds)
 {
     if(I2C::IsAvailable(this->i2c_port, this->address)!=ESP_OK){
-        *howLongToWaitForResult=portMAX_DELAY;
+        *howLongToWaitForResultMilliseconds=INT64_MAX;
         return ESP_FAIL;
     }
     config.bit.OS = 0; // always start conversion
@@ -31,7 +30,7 @@ esp_err_t ADS1115::Init(ads1115_sps_t sps, TickType_t *howLongToWaitForResult)
     config.bit.COMP_LAT = 0;
     config.bit.COMP_QUE = 0b11;
     ESP_LOGD(TAG, "Initial content of config register will be 0x%04X", config.reg);
-    *howLongToWaitForResult=SPSindex2WaitingTime[config.bit.DR];
+    *howLongToWaitForResultMilliseconds=SPSindex2WaitingTime[config.bit.DR];
     
 	uint8_t out[2];
     out[0] = config.reg >> 8;   // get 8 greater bits
