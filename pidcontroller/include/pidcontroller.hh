@@ -41,17 +41,17 @@ public:
       return ErrorCode::OBJECT_NOT_CHANGED;
 
     /*Compute all the working error variables*/
-    double input = *this->input;
+    T input = *this->input;
 
-    double Y_P = kp * (*this->setpoint - input);
+    T Y_P = kp * (*this->setpoint - input);
     this->Y_I += (ki * Y_P);
-    double Y_D = kd * (Y_P - last_Y_P);
+    T Y_D = kd * (Y_P - last_Y_P);
 
     // limit integrator
     this->Y_I = Y_I > outputMax ? outputMax : Y_I < outputMin ? outputMin
                                                               : Y_I;
 
-    double output = Y_P + Y_I + Y_D;
+    T output = Y_P + Y_I + Y_D;
 
     // limit output & anti integrator windup
     if (output > outputMax)
@@ -97,7 +97,7 @@ public:
 
     T Tn_s = (T)(tn_msecs)/1000.0;
     T Tv_s = (T)(tv_msecs)/1000.0;
-    double cycleTimeInSeconds = (double)cycleTimeMs / 1000.0;
+    float cycleTimeInSeconds = (double)cycleTimeMs / 1000.0;
     
 
     this->kp = kp;

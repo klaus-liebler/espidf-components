@@ -26,6 +26,7 @@
 #include "lwip/arch.h"
 #include "lwip/api.h"
 
+
 #define TAG "OTA"
 namespace otamanager
 {
@@ -34,9 +35,6 @@ namespace otamanager
 
     extern const uint8_t server_cert_pem_start[] asm("_binary_sciebo_cer_start");
     extern const uint8_t server_cert_pem_end[] asm("_binary_sciebo_cer_end");
-
-    constexpr char OTA_URL[]{"https://w-hs.sciebo.de/s/M43yoLOweqCjl5v/download"};
-
 
     enum class UpdateRequest{
         NO_REQUEST_PENDING=0,
@@ -81,7 +79,7 @@ namespace otamanager
             }
             
             esp_http_client_config_t config = {};
-            config.url = OTA_URL;
+            config.url = myself->updateURL;
             config.cert_pem = (char *)server_cert_pem_start;
             config.timeout_ms = 5000;
             config.keep_alive_enable = true;
@@ -175,10 +173,13 @@ namespace otamanager
                 esp_restart();
             }
         }
+        const char* updateURL{nullptr};
 
     public:
-        void InitAndRun()
+
+        void InitAndRun(const char* updateURL)
         {
+            this->updateURL=updateURL;
             xTaskCreate(M::updaterTask, "updaterTask", 4096 * 4, this, 0, NULL);
         }
 
