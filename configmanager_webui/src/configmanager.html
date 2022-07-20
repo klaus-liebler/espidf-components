@@ -1,0 +1,51 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>ConfigManager</title>
+  <link rel="stylesheet" href="app.css" inline>
+  <script src="bundle.js" inline></script>
+  <link rel="icon" type="image/png"
+    href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAsTAAALEwEAmpwYAAABrklEQVQokWP8//8/AymACVPoPwM+I1A0/Pn3a+2l5kfvLhPW8P///zuvT776fP/og+WiPHIENPz7/3f/nTmLzha///aUj12Ei40fjwaWrdf6uFj5X325//XX+5df7onxKDEwMOKz4fzT7W++Pnz//QUDA+P9d+fEeJTxqGZgYGCS4ld/++3p++/PxXgU7r87J86rCJH4+efrlqu9+27P+fvvN6oGPvV335/++PVJglf12+9P4jxKEIm7b86cerx+y/W+/kPhj95dQtHw9ttjTjY+AU5xBgaG////zz+Ve/bxJk0JuwK7FTxsws8+3Zh0NHr95dYff74wMDAwvvnyqHWvu6qIub6k+88/X5kZWbbdnPTr73cVYbM3Xx99+PFCjl/n+58vr78+EOCUCNKpZhHikuJg5lEQNLBSDIOEsrak09pLTTdeH2VgYFAUNMywmsvAwLDn1syzT7b8/vud8f//f08/XJcW0EQOzf8M/88/3rLxatfnX2+leNXD9BvlhPT+///HyMjEiCfxffv1ftPV3vffngbqVkvwqUAE8WmA28aIZDmW1IoGGFEjHgAjJ8Q1cSweSAAAAABJRU5ErkJggg==">
+</head>
+
+<body>
+  <template id="template_accordion">
+    <div class="accordion">
+      <button></button>
+      <div>
+        <table></table>
+      </div>
+    </div>
+  </template>
+  <template id="StringItem">
+    <tr>
+      <td><label></label></td>
+      <td><input type="text" /></td>
+    </tr>
+  </template>
+  <template id="IntegerItem">
+    <tr>
+      <td><label></label></td>
+      <td><input type="number" /></td>
+    </tr>
+  </template>
+  <template id="BooleanItem">
+    <tr>
+      <td><label></label></td>
+      <td><input type="checkbox" style="width: auto;" /></td>
+    </tr>
+  </template>
+  <template id="EnumItem">
+    <tr>
+      <td><label></label></td>
+      <td><select /></td>
+    </tr>
+  </template>
+  <h1>Properties</h1>
+  <section id="main"></section>
+  <input id="btn_update" class="styled" type="button" value="Update">
+</body>
+</html>

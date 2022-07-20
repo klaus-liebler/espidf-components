@@ -105,6 +105,8 @@ namespace WIFIMGR
 
     UPDATE_REASON_CODE urc{UPDATE_REASON_CODE::NO_CHANGE};
 
+    bool apAvailable{false};
+
     void connectAsSTA()
     {
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config_sta));
@@ -287,12 +289,14 @@ namespace WIFIMGR
         }
         case WIFI_EVENT_AP_START:
         {
-            ESP_LOGI(TAG, "Successfully started Access Point with ssid %s and password %s.", wifi_config_ap.ap.ssid, wifi_config_ap.ap.password);    
+            ESP_LOGI(TAG, "Successfully started Access Point with ssid %s and password %s.", wifi_config_ap.ap.ssid, wifi_config_ap.ap.password);
+            apAvailable=true;   
             break;
         }
         case WIFI_EVENT_AP_STOP:
         {
             ESP_LOGI(TAG, "Successfully closed Access Point.");    
+            apAvailable=false;
             break;
         }
         case WIFI_EVENT_AP_STACONNECTED:
@@ -573,6 +577,18 @@ namespace WIFIMGR
         
         ESP_LOGI(TAG, "Network Manager successfully started");
         return ESP_OK;
+    }
+
+    enum class SimpleState{
+        OFFLINE,
+        AP_AVAILABLE,
+        STA_CONNECTED,
+    };
+
+    SimpleState IsAvailableInNet(){
+        if(staState==STA_STATE::CONNECTED) return SimpleState::STA_CONNECTED;
+        if(apAvailable) return SimpleState::AP_AVAILABLE;
+        return SimpleState::OFFLINE;
     }
 
     void RegisterHTTPDHandlers(httpd_handle_t httpd_handle)

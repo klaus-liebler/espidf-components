@@ -1,0 +1,149 @@
+<!doctype html>
+<html>
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <title>esp32-wifi-manager</title>
+  <link rel="stylesheet" href="app.css" inline>
+  <script src="app.js" inline></script>
+  <link rel="icon" type="image/png"
+    href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAIAAACQkWg2AAAACXBIWXMAAAsTAAALEwEAmpwYAAABrklEQVQokWP8//8/AymACVPoPwM+I1A0/Pn3a+2l5kfvLhPW8P///zuvT776fP/og+WiPHIENPz7/3f/nTmLzha///aUj12Ei40fjwaWrdf6uFj5X325//XX+5df7onxKDEwMOKz4fzT7W++Pnz//QUDA+P9d+fEeJTxqGZgYGCS4ld/++3p++/PxXgU7r87J86rCJH4+efrlqu9+27P+fvvN6oGPvV335/++PVJglf12+9P4jxKEIm7b86cerx+y/W+/kPhj95dQtHw9ttjTjY+AU5xBgaG////zz+Ve/bxJk0JuwK7FTxsws8+3Zh0NHr95dYff74wMDAwvvnyqHWvu6qIub6k+88/X5kZWbbdnPTr73cVYbM3Xx99+PFCjl/n+58vr78+EOCUCNKpZhHikuJg5lEQNLBSDIOEsrak09pLTTdeH2VgYFAUNMywmsvAwLDn1syzT7b8/vud8f//f08/XJcW0EQOzf8M/88/3rLxatfnX2+leNXD9BvlhPT+///HyMjEiCfxffv1ftPV3vffngbqVkvwqUAE8WmA28aIZDmW1IoGGFEjHgAjJ8Q1cSweSAAAAABJRU5ErkJggg==">
+</head>
+
+<body>
+  <template id="icon-wifi">
+      <svg width="24" height="24" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path d="M1,9L3,11C7.97,6.03 16.03,6.03 21,11L23,9C16.93,2.93 7.08,2.93 1,9Z" />
+        <path d="M5,13L7,15C9.76,12.24 14.24,12.24 17,15L19,13C15.14,9.14 8.87,9.14 5,13Z" />
+        <path d="M9,17L12,20L15,17C13.35,15.34 10.66,15.34 9,17Z" />
+      </svg>
+  </template>
+  <template id="icon-lock">
+      <svg width="24" height="24" version="1.1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+        <path style="fill: black;"
+          d="M18 8h-1V6c0-2.76-2.24-5-5-5S7 3.24 7 6v2H6c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V10c0-1.1-.9-2-2-2zm-6 9c-1.1 0-2-.9-2-2s.9-2 2-2 2 .9 2 2-.9 2-2 2zm3.1-9H8.9V6c0-1.71 1.39-3.1 3.1-3.1 1.71 0 3.1 1.39 3.1 3.1v2z">
+        </path>
+      </svg>
+  </template>
+  <div id="screens">
+    <article id="main">
+      <h1>Current Connection</h1>
+      <table>
+        <tr>
+          <td>Hostname</td>
+          <td class="current_hostname"></td>
+        </tr>
+        <tr>
+          <td>Network SSID</td>
+          <td class="current_ssid"></td>
+        </tr>
+        <tr>
+          <td>Signal Strength</td>
+          <td class="current_rssi"></td>
+        </tr>
+      </table>
+      <div class="buttons">
+        <input id="btnDisconnectFromMain" type="button" value="Disconnect" />
+        <input id="btnShowDetails" type="button" value="Show Details"/>
+      </div>
+      <h1>Setup New Connection</h1>
+      <h2>Manual</h2>
+      <div class="buttons">
+        <input type="text" placeholder="Enter SSID here!" id="inpManualConnect" />
+        <input type="button" value="Connect" id="btnManualConnect" />
+      </div>
+      <h2>Select in List</h2>
+      <table id="wifi-list"></table>
+    </article>
+    <article id="enter_password">
+      <h1>Enter Password for <span class="ssid_to_connect_to">%&%&%</span></h1>
+      <input id="pwdPassword" type="password" placeholder="Password" />
+      <div class="buttons">
+        <input class="cancel" type="button" value="Cancel" />
+        <input id="btnJoin" type="button" value="Join"/>
+      </div>
+    </article>
+    <article id="connection_success">
+      <h1 class="gr">Connection was successful.</h1>
+      <p>Connect your laptop/tablet/smartphone to wifi "<span class="current_ssid">%%%%</span>" and open <a class="link2site">%%%%</a></p>
+      <table>
+        <tr>
+          <td>Hostname</td>
+          <td class="current_hostname"></td>
+        </tr>
+        <tr>
+          <td>Network SSID</td>
+          <td class="current_ssid"></td>
+        </tr>
+        <tr>
+          <td>Signal Strength</td>
+          <td class="current_rssi"></td>
+        </tr>
+      </table>
+    </article>
+    <article id="connection_failed">
+      <h1 class="rd">Connection failed</h1>
+      <p>Please double-check wifi password if any and make sure the access point has good signal.</p>
+    </article>
+    <article id="connect_wait">
+      <h1 style="text-align: center;">Connecting to <span class="ssid_to_connect_to"></span></h1>
+      <div class="lds-ring"><div></div><div></div><div></div><div></div></div>
+      <p style="text-align: center;">You may lose wifi access while the esp32 recalibrates its radio. Please wait until your device automatically reconnects. This can take up to 30s.</p>
+      <div class="buttons" style="justify-content: center; ">
+        <input type="button" value="Cancel" class="ctr cancel" />
+      </div>
+    </article>
+    <article id="delete_success">
+      <h1 class="gr">Delete Success</h1>
+      <p>Deletion has been successfully completed. Please connect to the devices access point (ssid is <span class="current_ssid_ap">%%%%</span>). </p>
+    </article>
+    
+    <article id="connection_details">
+      <h1>Connection Details</h1>
+      <table>
+        <tr>
+          <td>Hostname</td>
+          <td class="current_hostname"></td>
+        </tr>
+        <tr>
+          <td>Network SSID</td>
+          <td class="current_ssid"></td>
+        </tr>
+        <tr>
+          <td>Signal Strength</td>
+          <td class="current_rssi"></td>
+        </tr>
+        <tr>
+          <td>IP Address</td>
+          <td class="current_ip"></td>
+        </tr>
+        <tr>
+          <td>Netmask</td>
+          <td class="current_netmask"></td>
+        </tr>
+        <tr>
+          <td>Gateway</td>
+          <td class="current_gw"></td>
+        </tr>
+      </table>
+      <div class="buttons">
+        <input id="btnDisconnectFromDetails" type="button" value="Disconnect" />
+        <input class="cancel" type="button" value="Close Details" />
+      </div>
+    </article>
+    <article id="confirm_delete">
+      <div class="diag-box-win">
+        <p>Are you sure you would like to disconnect from <span class="current_ssid"></span></p>
+        <div class="buttons">
+          <input id="no-disconnect" type="button" value="No" />
+          <input id="yes-disconnect" type="button" value="Yes" />
+        </div>
+      </div>
+    </article>
+
+  </div>
+</body>
+
+</html>

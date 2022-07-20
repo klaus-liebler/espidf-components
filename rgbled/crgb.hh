@@ -303,7 +303,8 @@ struct CRGB
         // color correction on your LEDs (recommended).
         FairyLight = PrepareColor(0xFFE42DFF),
         // If you are using no color correction, use this
-        FairyLightNCC = PrepareColor(0xFF9D2AFF)
+        FairyLightNCC = PrepareColor(0xFF9D2AFF),
+        TRANSPARENT=PrepareColor(0x00000000)
 
     } HTMLColorCode;
 };
