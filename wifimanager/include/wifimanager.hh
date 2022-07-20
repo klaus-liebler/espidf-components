@@ -585,7 +585,7 @@ namespace WIFIMGR
         STA_CONNECTED,
     };
 
-    SimpleState IsAvailableInNet(){
+    SimpleState GetState(){
         if(staState==STA_STATE::CONNECTED) return SimpleState::STA_CONNECTED;
         if(apAvailable) return SimpleState::AP_AVAILABLE;
         return SimpleState::OFFLINE;

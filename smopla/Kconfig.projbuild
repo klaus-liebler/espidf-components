@@ -35,6 +35,6 @@ menu "Smopla"
         string "SMOPLA_OTA_URL"
         default "https://w-hs.sciebo.de/s/M43yoLOweqCjl5v/download"
     config SMOPLA_HTTP_SCRATCHPAD_SIZE
-        int HTTP_SCRATCHPAD_SIZE
+        int "SMOPLA_HTTP_SCRATCHPAD_SIZE"
         default 2048
 endmenu
