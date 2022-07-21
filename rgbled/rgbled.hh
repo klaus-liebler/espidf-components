@@ -37,11 +37,13 @@ class BlinkPattern:public AnimationPattern{
             if(lastChange+time1<=now){
                 state=false;
                 lastChange=now;
+                //LOGI(TAG, "Animation to %d", color0.raw32);
             }
         }else{
             if(lastChange+time0<=now){
                 state=true;
                 lastChange=now;
+                //LOGI(TAG, "Animation to %d", color1.raw32);
             }
         }
         return state?color1:color0;
@@ -101,7 +103,12 @@ public:
         for (i = 0; i < LEDSIZE; i++) {
             AnimationPattern* p =patterns[i];
             if(p!=nullptr){
-                SetPixel(i, p->Animate(now), false);
+                //avoid using SetPixel here, as this may have unintentional consequences
+                CRGB color = p->Animate(now);
+                if((this->table[i])!=(color.raw32)){
+                    this->table[i]=color.raw32;
+                    this->dirty=true;
+                }
             }
         }
         

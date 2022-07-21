@@ -582,6 +582,12 @@ ErrorCode DeviceManager::Loop()
     }
     else if(experimentMode==ExperimentMode::openloop_ptn){
         ptnPIDController->SetMode(Mode::OFF, nowMsSteady);
+        float *voltages;
+        hal->GetAnalogInputs(&voltages);
+        hal->ColorizeLed(0, CRGB::FromTemperature(0, 3.3, voltages[0]).raw32);
+        hal->ColorizeLed(1, CRGB::FromTemperature(0, 3.3, voltages[1]).raw32);
+        hal->ColorizeLed(2, CRGB::FromTemperature(0, 3.3, voltages[2]).raw32);
+        hal->ColorizeLed(3, CRGB::FromTemperature(0, 3.3, voltages[3]).raw32);
         hal->SetAnalogOutput(this->setpointVoltageOut);
     }
     else if(experimentMode==ExperimentMode::closedloop_ptn){
@@ -592,6 +598,10 @@ ErrorCode DeviceManager::Loop()
         }
         float *voltages;
         hal->GetAnalogInputs(&voltages);
+        hal->ColorizeLed(0, CRGB::FromTemperature(0, 3.3, voltages[0]).raw32);
+        hal->ColorizeLed(1, CRGB::FromTemperature(0, 3.3, voltages[1]).raw32);
+        hal->ColorizeLed(2, CRGB::FromTemperature(0, 3.3, voltages[2]).raw32);
+        hal->ColorizeLed(3, CRGB::FromTemperature(0, 3.3, voltages[3]).raw32);
         this->actualPtn=voltages[3];
         if(ptnPIDController->Compute(nowMsSteady)==ErrorCode::OK){ //OK means: Value changed
              ESP_LOGI(TAG, "Computed a new  setpointPtn %F", setpointVoltageOut);

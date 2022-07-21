@@ -16,6 +16,7 @@
 #include <ads1115.hh>
 #include <i2c.hh>
 #include "winfactboris_messages.hh"
+#include <wifimanager.hh>
 
 
 
@@ -70,7 +71,7 @@ private:
 
     void SensorLoop()
     {
-
+        
         int64_t nextADS1115Readout{UINT32_MAX};
         uint16_t nextADS1115Mux{0b100}; //100...111
         int64_t ads1115ReadoutInterval{portMAX_DELAY};
@@ -91,7 +92,7 @@ private:
             ESP_LOGW(TAG, "I2C: ADS1115 not found");
         }
         
-       
+        WIFIMGR::SimpleState lastWifiState{WIFIMGR::SimpleState::OFFLINE};
         while (true)
         {
             if(GetMillis64() > nextBinaryAndAnalogReadout){
@@ -108,6 +109,27 @@ private:
                 ads1115->TriggerMeasurement((ads1115_mux_t)nextADS1115Mux);
                 nextADS1115Readout = xTaskGetTickCount() + ads1115ReadoutInterval;
             }
+            WIFIMGR::SimpleState newWifiState = WIFIMGR::GetState();
+            if(newWifiState!=lastWifiState){
+                switch (newWifiState)
+                {
+                case WIFIMGR::SimpleState::AP_AVAILABLE:
+                    strip->AnimatePixel(0, &blinkFastBlueGreen);
+                    break;
+                case WIFIMGR::SimpleState::OFFLINE:
+                    strip->AnimatePixel(0, &blinkFastRedBlack);
+                    break;
+                case WIFIMGR::SimpleState::STA_CONNECTED:
+                    strip->SetPixel(0, CRGB::DarkGreen);
+
+                    break;
+                default:
+                    break;
+                }
+                lastWifiState=newWifiState;
+            }
+
+            
             strip->Refresh(100);  //checks internally, whether data is dirty and has to be pushed out
             vTaskDelay(1);
         }
@@ -250,6 +272,12 @@ public:
 
     ErrorCode InitAndRun()
     {
+        //LED Strip
+        strip = new RGBLED<LED_NUMBER, DeviceType::PL9823>();
+        ESP_ERROR_CHECK(strip->Init(VSPI_HOST, PIN_LED_WS2812, 2 ));
+        ESP_ERROR_CHECK(strip->Clear(100));
+        int i=0;
+        ESP_ERROR_CHECK(strip->AnimatePixel(0, &blinkFastRedBlack));      
         //Configure Analog
         adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
         esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_0db, ADC_WIDTH_BIT_12, DEFAULT_VREF, adc_chars);
@@ -262,11 +290,6 @@ public:
         //I2C Master
         ESP_ERROR_CHECK(I2C::Init(I2C_PORT, PIN_I2C_SCL, PIN_I2C_SDA));
 
-        //LED Strip
-        strip = new RGBLED<LED_NUMBER, DeviceType::PL9823>();
-        ESP_ERROR_CHECK(strip->Init(VSPI_HOST, PIN_LED_WS2812, 2 ));
-        ESP_ERROR_CHECK(strip->Clear(100));
-        ESP_ERROR_CHECK(strip->AnimatePixel(0, &blinkFastRedBlack));
 
         readBinaryAndAnalogIOs();//do this while init to avoid race condition (wifimanager is resettet when red and green buttons are pressed during startup)
         xTaskCreate(sensorTask, "sensorTask", 4096 * 4, this, 6, nullptr);
@@ -301,7 +324,7 @@ public:
 
     ErrorCode ColorizeLed(uint8_t ledIndex, uint32_t color)
     {
-        if(ledIndex>=LED_NUMBER) return ErrorCode::INDEX_OUT_OF_BOUNDS;
+        if(ledIndex>=LED_NUMBER-1) return ErrorCode::INDEX_OUT_OF_BOUNDS;
         ledIndex = (ledIndex+1)%LED_NUMBER;
         CRGB colorCRGB(color);
         strip->SetPixel(ledIndex, colorCRGB);
@@ -310,7 +333,11 @@ public:
 
     ErrorCode UnColorizeAllLed()
     {
-        strip->Clear();
+        //all except the status led 0, which is controlled from hal directly
+        strip->SetPixel(1, CRGB::Black);
+        strip->SetPixel(2, CRGB::Black);
+        strip->SetPixel(3, CRGB::Black);
+        strip->SetPixel(4, CRGB::Black);
         return ErrorCode::OK;
     }
 

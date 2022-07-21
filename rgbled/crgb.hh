@@ -1,5 +1,6 @@
 #pragma once
 #include <inttypes.h>
+#include <algorithm>
 
 //#define PrepareColorGRB(rgb) ( (((rgb) << 8) & 0x00FF0000) | (((rgb) >> 8) & 0x0000FF00) | (rgb & 0x000000FF) )
 //#define PrepareColor PrepareColorGRB
@@ -142,6 +143,14 @@ struct CRGB
             b = rgb_max - rgb_adj;
             break;
         }
+        return CRGB(r,g,b);
+    }
+
+    static CRGB FromTemperature(float minimum, float maximum, float value){
+        float ratio = 2.0 * (value-minimum) / (maximum - minimum);
+        uint8_t b = (uint8_t)std::max(0.0, 255.0*(1.0 - ratio));
+        uint8_t r = (uint8_t)std::max(0.0, 255.0*(ratio - 1.0));
+        uint8_t g = 255.0 - b - r;
         return CRGB(r,g,b);
     }
 
