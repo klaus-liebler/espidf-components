@@ -731,13 +731,12 @@ public:
 
         //MCPWM for Fans (same settings as servo)
         ESP_ERROR_CHECK(mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_FAN, &pwm_config));
+        ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_FAN2, PIN_FAN2_DRIVE));
         
         //MCPWM for Heater and PowerLED
-        pwm_config.frequency = 1;
+        pwm_config.frequency = 5;
         ESP_ERROR_CHECK(mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, &pwm_config));
-
-        //FAN2Drive
-        ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_FAN2, PIN_FAN2_DRIVE));
+        ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_HEATER_OR_LED_POWER, PIN_HEATER_OR_LED_POWER));
 
         //I2C Master
         ESP_ERROR_CHECK(I2C::Init(I2C_PORT, PIN_I2C_SCL, PIN_I2C_SDA));
