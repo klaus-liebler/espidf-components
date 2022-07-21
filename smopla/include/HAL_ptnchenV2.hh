@@ -108,29 +108,30 @@ private:
                     nextADS1115Mux = 0b100;
                 ads1115->TriggerMeasurement((ads1115_mux_t)nextADS1115Mux);
                 nextADS1115Readout = xTaskGetTickCount() + ads1115ReadoutInterval;
-            }
-            WIFIMGR::SimpleState newWifiState = WIFIMGR::GetState();
-            if(newWifiState!=lastWifiState){
-                switch (newWifiState)
-                {
-                case WIFIMGR::SimpleState::AP_AVAILABLE:
-                    strip->AnimatePixel(0, &blinkFastBlueGreen);
-                    break;
-                case WIFIMGR::SimpleState::OFFLINE:
-                    strip->AnimatePixel(0, &blinkFastRedBlack);
-                    break;
-                case WIFIMGR::SimpleState::STA_CONNECTED:
-                    strip->SetPixel(0, CRGB::DarkGreen);
+                WIFIMGR::SimpleState newWifiState = WIFIMGR::GetState();
+                if(newWifiState!=lastWifiState){
+                    switch (newWifiState)
+                    {
+                    case WIFIMGR::SimpleState::AP_AVAILABLE:
+                        strip->AnimatePixel(0, &blinkFastBlueGreen);
+                        break;
+                    case WIFIMGR::SimpleState::OFFLINE:
+                        strip->AnimatePixel(0, &blinkFastRedBlack);
+                        break;
+                    case WIFIMGR::SimpleState::STA_CONNECTED:
+                        strip->SetPixel(0, CRGB::DarkGreen);
 
-                    break;
-                default:
-                    break;
+                        break;
+                    default:
+                        break;
+                    }
+                    lastWifiState=newWifiState;
                 }
-                lastWifiState=newWifiState;
-            }
 
             
             strip->Refresh(100);  //checks internally, whether data is dirty and has to be pushed out
+            }
+
             vTaskDelay(1);
         }
     }

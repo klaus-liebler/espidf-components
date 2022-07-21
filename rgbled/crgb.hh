@@ -1,6 +1,8 @@
 #pragma once
 #include <inttypes.h>
 #include <algorithm>
+#include <cmath>
+#define TAG "CRGB"
 
 //#define PrepareColorGRB(rgb) ( (((rgb) << 8) & 0x00FF0000) | (((rgb) >> 8) & 0x0000FF00) | (rgb & 0x000000FF) )
 //#define PrepareColor PrepareColorGRB
@@ -52,7 +54,7 @@ struct CRGB
     inline CRGB() __attribute__((always_inline)) = default;
 
     /// allow construction from R, G, B
-    inline CRGB(uint8_t ir, uint8_t ig, uint8_t ib, uint8_t ia=0xFF) __attribute__((always_inline))
+    inline CRGB(uint8_t ir, uint8_t ig, uint8_t ib, uint8_t ia = 0xFF) __attribute__((always_inline))
     : r(ir), g(ig), b(ib), a(ia)
     {
     }
@@ -62,7 +64,7 @@ struct CRGB
     {
     }
 
-    //inline CRGB( PredefinedColors colorcode)  __attribute__((always_inline))
+    // inline CRGB( PredefinedColors colorcode)  __attribute__((always_inline))
     //: r(((uint32_t)colorcode >> 16) & 0xFF), g(((uint32_t)colorcode >> 8) & 0xFF), b(((uint32_t)colorcode >> 0) & 0xFF)
     //{
     //}
@@ -111,7 +113,8 @@ struct CRGB
         // RGB adjustment amount by hue
         uint32_t rgb_adj = (rgb_max - rgb_min) * diff / 60;
 
-        switch (i) {
+        switch (i)
+        {
         case 0:
             r = rgb_max;
             g = rgb_min + rgb_adj;
@@ -143,15 +146,89 @@ struct CRGB
             b = rgb_max - rgb_adj;
             break;
         }
-        return CRGB(r,g,b);
+        return CRGB(r, g, b);
     }
 
-    static CRGB FromTemperature(float minimum, float maximum, float value){
-        float ratio = 2.0 * (value-minimum) / (maximum - minimum);
-        uint8_t b = (uint8_t)std::max(0.0, 255.0*(1.0 - ratio));
-        uint8_t r = (uint8_t)std::max(0.0, 255.0*(ratio - 1.0));
-        uint8_t g = 255.0 - b - r;
-        return CRGB(r,g,b);
+/*! \brief Convert HSV to RGB color space
+
+  Converts a given set of HSV values `h', `s', `v' into RGB
+  coordinates. The output RGB values are in the range [0, 1], and
+  the input HSV values are in the ranges h = [0, 360], and s, v =
+  [0, 1], respectively.
+
+  \param fR Red component, used as output, range: [0, 1]
+  \param fG Green component, used as output, range: [0, 1]
+  \param fB Blue component, used as output, range: [0, 1]
+  \param fH Hue component, used as input, range: [0, 360]
+  \param fS Hue component, used as input, range: [0, 1]
+  \param fV Hue component, used as input, range: [0, 1]
+
+*/
+    static CRGB FromHSVNew(float fH, float fS, float fV)
+    {
+        float fC = fV * fS; // Chroma
+        float fHPrime = fmod(fH / 60.0, 6);
+        float fX = fC * (1 - fabs(fmod(fHPrime, 2) - 1));
+        float fM = fV - fC;
+
+        float fR, fG, fB;
+
+        if (0 <= fHPrime && fHPrime < 1)
+        {
+            fR = fC;
+            fG = fX;
+            fB = 0;
+        }
+        else if (1 <= fHPrime && fHPrime < 2)
+        {
+            fR = fX;
+            fG = fC;
+            fB = 0;
+        }
+        else if (2 <= fHPrime && fHPrime < 3)
+        {
+            fR = 0;
+            fG = fC;
+            fB = fX;
+        }
+        else if (3 <= fHPrime && fHPrime < 4)
+        {
+            fR = 0;
+            fG = fX;
+            fB = fC;
+        }
+        else if (4 <= fHPrime && fHPrime < 5)
+        {
+            fR = fX;
+            fG = 0;
+            fB = fC;
+        }
+        else if (5 <= fHPrime && fHPrime < 6)
+        {
+            fR = fC;
+            fG = 0;
+            fB = fX;
+        }
+        else
+        {
+            fR = 0;
+            fG = 0;
+            fB = 0;
+        }
+
+        fR += fM;
+        fG += fM;
+        fB += fM;
+        return CRGB(fR*255, fG*255, fB*255, 255);
+    }
+
+    static CRGB FromTemperature(float minimum, float maximum, float value)
+    {
+        float m = (value - minimum) / (maximum - minimum);
+        float h = 240.0 + 120.0 * m;
+        CRGB crgb = FromHSVNew(h, 1, 1);
+        //ESP_LOGI(TAG, "HUE %f-->R%d G%d B%d", h, crgb.r, crgb.g, crgb.b);
+        return crgb;
     }
 
     typedef enum
@@ -213,7 +290,7 @@ struct CRGB
         Goldenrod = PrepareColor(0xDAA520FF),
         Gray = PrepareColor(0x808080FF),
         Grey = PrepareColor(0x808080FF),
-        Green = PrepareColor(0x008000FF),
+        Green = PrepareColor(0x00FF00FF),
         GreenYellow = PrepareColor(0xADFF2FFF),
         Honeydew = PrepareColor(0xF0FFF0FF),
         HotPink = PrepareColor(0xFF69B4FF),
@@ -313,7 +390,7 @@ struct CRGB
         FairyLight = PrepareColor(0xFFE42DFF),
         // If you are using no color correction, use this
         FairyLightNCC = PrepareColor(0xFF9D2AFF),
-        TRANSPARENT=PrepareColor(0x00000000)
+        TRANSPARENT = PrepareColor(0x00000000)
 
     } HTMLColorCode;
 };
@@ -327,3 +404,4 @@ inline bool operator!=(const CRGB &lhs, const CRGB &rhs)
 {
     return !(lhs == rhs);
 }
+#undef TAG

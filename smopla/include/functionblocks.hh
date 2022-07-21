@@ -377,7 +377,7 @@ class FB_Bool2ColorConverter: public FunctionBlock{
             return ErrorCode::OK;;
         }
         FB_Bool2ColorConverter(uint32_t IdOnWebApp, size_t input, size_t output, uint32_t colorOnTRUE, uint32_t colorOnFALSE=0):
-            FunctionBlock(IdOnWebApp), input(input), output(output), colorOnTRUE(colorOnTRUE), colorOnFALSE(colorOnFALSE){}
+            FunctionBlock(IdOnWebApp), input(input), output(output), colorOnTRUE(colorOnTRUE<<8), colorOnFALSE(colorOnFALSE<<8){}
         ~FB_Bool2ColorConverter(){}
 };
 
