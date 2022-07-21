@@ -20,7 +20,7 @@
 typedef float BorisFloat;
 typedef uint8_t BorisBool;
 typedef uint8_t BorisIsValid;
-typedef int32_t BorisInt;
+typedef int BorisInt;
 typedef uint32_t BorisMessageType;
 typedef uint32_t BorisColor;
 

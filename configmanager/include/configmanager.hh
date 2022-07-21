@@ -107,10 +107,10 @@ namespace configmanager
         }
 
         esp_err = nvs_open_from_partition(NVS_PARTITION, NVS_NAMESPACE, NVS_READWRITE, &nvsHandle);
-        if (esp_err != ESP_OK)
+        if (esp_err != ESP_OK){
             ESP_LOGE(TAG, "Unable to open NVS");
             return ESP_FAIL;
-        
+        }
         key_ptr = strtok(buf, delimiter_unit);
         while (key_ptr) //one loop iteration -> one key-type-value
         {

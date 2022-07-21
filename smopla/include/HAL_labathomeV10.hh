@@ -462,10 +462,6 @@ public:
         return ErrorCode::OK;
     }
 
-    ErrorCode HardwareTest() override{
-        return ErrorCode::OK;
-    }
-
     int64_t IRAM_ATTR GetMicros()
     {
         return esp_timer_get_time();
@@ -670,9 +666,10 @@ public:
     }
 
 
-    ErrorCode InitAndRun()
+    ErrorCode InitAndRun() override
     {
         // i2s config for reading from left channel of I2S - this is standard for microphones
+        /*
         i2s_config_t i2sMemsConfigLeftChannel = {};
         i2sMemsConfigLeftChannel.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_RX);
         i2sMemsConfigLeftChannel.sample_rate = SAMPLE_RATE_MICROPHONE;
@@ -690,12 +687,14 @@ public:
         i2sPins.ws_io_num = PIN_I2S_WS;
         i2sPins.data_out_num = I2S_PIN_NO_CHANGE;
         i2sPins.data_in_num = PIN_I2S_SD;
+        
         i2s_driver_install(I2S_PORT_MICROPHONE, &i2sMemsConfigLeftChannel, 0, NULL);
         i2s_set_pin(I2S_PORT_MICROPHONE, &i2sPins);
+        */
 
         //Configure Analog (before Rotary Encoder!!!)
         adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
-        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_0db, ADC_WIDTH_BIT_12, DEFAULT_VREF, adc_chars);
+        esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_0, ADC_WIDTH_BIT_12, DEFAULT_VREF, adc_chars);
         adc1_config_width(ADC_WIDTH_BIT_12);
         adc1_config_channel_atten(CHANNEL_SWITCHES, ADC_ATTEN_DB_0);
         adc1_config_channel_atten(CHANNEL_ANALOGIN_OR_ROTB, ADC_ATTEN_DB_11);

@@ -1,5 +1,6 @@
 #pragma once
 #include <stdint.h>
+#include <stddef.h>
 #include <array>
 
 #define ALL4  __attribute__ ((aligned (16)))

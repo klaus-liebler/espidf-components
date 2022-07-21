@@ -849,7 +849,9 @@ ErrorCode DeviceManager::TriggerBorisUDP(uint8_t *requestU8, size_t requestLen, 
             input->MessageType=MESSAGE_TYPE_INPUTDATA_LABATHOME;
             input->MovementSensor=hal->IsMovementDetected();
             input->SoundIsValid=0x01;
-            hal->GetSound(&input->SoundValue);
+            int32_t songNumber;
+            hal->GetSound(&songNumber);
+            input->SoundValue=(BorisInt)songNumber;
             input->UsbSupplyVoltageVolts=hal->GetUSBCVoltage();
             hal->GetWifiRssiDb(&input->WifiSignalStrengthDB);
             responseLen=sizeof(MessageInputDataLabAtHome);
