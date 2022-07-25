@@ -172,7 +172,7 @@ namespace WIFIMGR
         return ret;
     }
 
-    bool read_sta_config()
+    esp_err_t read_sta_config()
     {
         nvs_handle handle;
         esp_err_t ret = ESP_OK;
@@ -245,7 +245,7 @@ namespace WIFIMGR
         }
         case WIFI_EVENT_STA_DISCONNECTED:
         {
-            //wifi_event_sta_disconnected_t *wifi_event_sta_disconnected = (wifi_event_sta_disconnected_t *)event_data;
+            wifi_event_sta_disconnected_t *wifi_event_sta_disconnected = (wifi_event_sta_disconnected_t *)event_data;
             xSemaphoreTake(wifi_manager_mutex, portMAX_DELAY);
             scanIsActive = false; // if a DISCONNECT message is posted while a scan is in progress this scan will NEVER end, causing scan to never work again. For this reason SCAN_BIT is cleared too
             // if there was a timer on to stop the AP, well now it's time to cancel that since connection was lost! */
@@ -270,12 +270,12 @@ namespace WIFIMGR
                 //Die Verbindung war bereits getrennt und es wurd über den Retry Timer versucht, diese neu aufzubauen. Das schlug fehl
                 urc = UPDATE_REASON_CODE::LOST_CONNECTION;
                 if(remainingAttempsToConnectAsSTA<=0){
-                    ESP_LOGW(TAG, "After (several?) attemps it was not possible to establish connection as STA with ssid %s and password %s. Start AccessPoint mode with ssid %s and password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password, wifi_config_ap.ap.ssid, wifi_config_ap.ap.password);
+                    ESP_LOGW(TAG, "After (several?) attemps it was not possible to establish connection as STA with ssid %s and password %s (Reason %d). Start AccessPoint mode with ssid %s and password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password, wifi_event_sta_disconnected->reason, wifi_config_ap.ap.ssid, wifi_config_ap.ap.password);
                     staState = STA_STATE::NO_CONNECTION;
                     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
                 }
                 else{
-                    ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED, when STA_STATE::ABOUT_TO_CONNECT --> disconnection occured earlier and we tried to establish it again...which was not successful. Still %d attempt(s) to go.", remainingAttempsToConnectAsSTA); 
+                    ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED, when STA_STATE::ABOUT_TO_CONNECT --> disconnection occured earlier and we tried to establish it again...which was not successful (Reason %d). Still %d attempt(s) to go.", wifi_event_sta_disconnected->reason, remainingAttempsToConnectAsSTA); 
                     staState = STA_STATE::SHOULD_CONNECT;
                     xTimerStart(wifi_manager_retry_timer, portMAX_DELAY);
                 }
@@ -289,7 +289,11 @@ namespace WIFIMGR
         }
         case WIFI_EVENT_AP_START:
         {
-            ESP_LOGI(TAG, "Successfully started Access Point with ssid %s and password %s.", wifi_config_ap.ap.ssid, wifi_config_ap.ap.password);
+            esp_netif_ip_info_t ip_info = {};
+            esp_netif_get_ip_info(wifi_netif_ap, &ip_info);
+            ESP_LOGI(TAG, "Successfully started Access Point with ssid %s and password %s. Website is here: http://" IPSTR " . Wifimanager is here: http://" IPSTR "/wifimanager", wifi_config_ap.ap.ssid, wifi_config_ap.ap.password, IP2STR(&ip_info.ip), IP2STR(&ip_info.ip));
+            
+                
             apAvailable=true;   
             break;
         }
@@ -405,13 +409,13 @@ namespace WIFIMGR
         ptr = strtok(buf, delimiter);
         ESP_GOTO_ON_FALSE(ptr, ESP_FAIL, response, TAG, "In handle_post_wifimanager(): no ssid found");
         len = strlen(ptr);
-        ESP_GOTO_ON_FALSE(len <= MAX_SSID_LEN, ESP_FAIL, response, TAG, "SSID too long");
-        strncpy((char *)wifi_config_sta.sta.ssid, ptr, len);
+        ESP_GOTO_ON_FALSE(len <= MAX_SSID_LEN-1, ESP_FAIL, response, TAG, "SSID too long");
+        snprintf((char *)wifi_config_sta.sta.ssid, MAX_SSID_LEN-1, ptr);
         ptr = strtok(NULL, delimiter);
         ESP_GOTO_ON_FALSE(ptr, ESP_FAIL, response, TAG, "In handle_post_wifimanager(): no password found");
         len = strlen(ptr);
-        ESP_GOTO_ON_FALSE(len <= MAX_PASSPHRASE_LEN, ESP_FAIL, response, TAG, "PASSPHRASE too long");    
-        strncpy((char *)wifi_config_sta.sta.password, ptr, len);
+        ESP_GOTO_ON_FALSE(len <= MAX_PASSPHRASE_LEN-1, ESP_FAIL, response, TAG, "PASSPHRASE too long");
+        snprintf((char *)wifi_config_sta.sta.password, MAX_PASSPHRASE_LEN-1, ptr);
         ESP_LOGI(TAG, "Got a new SSID %s and PASSWORD %s from browser. wifi_config_sta is marked dirty.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password);
         remainingAttempsToConnectAsSTA=1;
         connectAsSTA();
@@ -420,8 +424,11 @@ namespace WIFIMGR
         esp_netif_get_ip_info(wifi_netif_sta, &ip_info);
         const char *hostname;
         esp_netif_get_hostname(wifi_netif_sta, &hostname);
-        wifi_ap_record_t ap;
-        esp_wifi_sta_get_ap_info(&ap);
+        wifi_ap_record_t ap={};
+        ap.rssi=0;
+        if(staState==STA_STATE::CONNECTED){
+            esp_wifi_sta_get_ap_info(&ap);
+        }
         pos += snprintf(buf + pos, http_buffer_len - pos, "%s%c%s%c%s%c%d%c" IPSTR "%c" IPSTR "%c" IPSTR "%c%d%c", wifi_config_ap.ap.ssid, UNIT_SEPARATOR, hostname, UNIT_SEPARATOR, wifi_config_sta.sta.ssid, UNIT_SEPARATOR, ap.rssi, UNIT_SEPARATOR, IP2STR(&ip_info.ip), UNIT_SEPARATOR, IP2STR(&ip_info.netmask), UNIT_SEPARATOR, IP2STR(&ip_info.gw), UNIT_SEPARATOR, (int)urc, RECORD_SEPARATOR);
         for (size_t i = 0; i < accessp_records_len; i++)
         {

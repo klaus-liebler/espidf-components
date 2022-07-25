@@ -1,4 +1,5 @@
 #pragma once
+#define I2S_ACTIVE
 
 #include "HAL.hh"
 
@@ -13,7 +14,7 @@
 #include <driver/adc.h>
 #include <driver/i2c.h>
 #include <driver/rmt.h>
-#include <driver/i2s.h>
+
 #include <arduinoFFT.h>
 
 #include <errorcodes.hh>
@@ -29,11 +30,14 @@
 #include <owb_rmt.h>
 #include <ds18b20.h>
 #include <rotenc.hh>
-#include <i2c.hh>
+#ifdef I2S_ACTIVE
+#include <driver/i2s.h>
 #include <MP3Player.hh>
+#endif
 #include <PD_UFP.h>
 
 #include "winfactboris_messages.hh"
+#ifdef I2S_ACTIVE
 FLASH_FILE(alarm_co2_mp3)
 FLASH_FILE(alarm_temperature_mp3)
 FLASH_FILE(nok_mp3)
@@ -43,12 +47,12 @@ FLASH_FILE(fanfare_mp3)
 FLASH_FILE(negative_mp3)
 FLASH_FILE(positive_mp3)
 FLASH_FILE(siren_mp3)
-
-
-
 const uint8_t *SOUNDS[]  = {nullptr, alarm_co2_mp3_start, alarm_temperature_mp3_start, nok_mp3_start, ok_mp3_start, ready_mp3_start, fanfare_mp3_start, negative_mp3_start, positive_mp3_start, siren_mp3_start};
 const size_t SONGS_LEN[] = {0,       alarm_co2_mp3_size,  alarm_temperature_mp3_size,  nok_mp3_size,  ok_mp3_size,  ready_mp3_size,  fanfare_mp3_size,  negative_mp3_size,  positive_mp3_size,  siren_mp3_size};
 
+
+MP3::Player mp3player;
+#endif
 
 typedef gpio_num_t Pintype;
 
@@ -124,11 +128,10 @@ enum class MODE_MOVEMENT_OR_FAN1SENSE:uint8_t{
     FAN1SENSE=2,
 };
 
-enum class MODE_FAN1_DRIVE_OR_SERVO1:uint8_t{
-    FAN1_DRIVE=1,
+enum class MODE_FAN1_OR_SERVO1:uint8_t{
+    FAN1=1,
     SERVO1=2,
 };
-
 
 
 enum class Button : uint8_t
@@ -147,6 +150,7 @@ constexpr uint16_t sw_limits[]{160, 480, 1175, 1762, 2346, 2779, 3202};
 constexpr float SERVO_MIN_PULSEWIDTH{500.0};  //Minimum pulse width in microsecond
 constexpr float SERVO_MAX_PULSEWIDTH{2400.0}; //Maximum pulse width in microsecond
 constexpr float SERVO_MAX_DEGREE{180.0};      //Maximum angle in degree upto which servo can rotate
+
 constexpr ledc_timer_bit_t power_ledc_timer_duty_resolution{LEDC_TIMER_10_BIT};
 
 constexpr mcpwm_timer_t MCPWM_TIMER_SERVO{MCPWM_TIMER_0};
@@ -165,9 +169,14 @@ constexpr mcpwm_timer_t MCPWM_TIMER_HEATER_OR_LED_POWER{MCPWM_TIMER_2};
 constexpr mcpwm_io_signals_t MCPWM_IO_HEATER_OR_LED_POWER{MCPWM2A};
 constexpr mcpwm_generator_t MCPWM_GEN_HEATER_OR_LED_POWER{MCPWM_GEN_A};
 
+constexpr int FREQUENCY_HEATER{1}; //see https://docs.espressif.com/projects/esp-idf/en/latest/esp32/api-reference/peripherals/mcpwm.html#resolution
+constexpr int FREQUENCY_SERVO{50};
+constexpr int FREQUENCY_FAN{100};
+constexpr int FREQUENCY_LED{300};
+#ifdef I2S_ACTIVE
 constexpr i2s_port_t I2S_PORT_MICROPHONE{I2S_NUM_1};
 constexpr i2s_port_t I2S_PORT_LOUDSPEAKER{I2S_NUM_0};//must be I2S_NUM_0, as only this hat access to internal DAC
-
+#endif
 constexpr int average_over_N_measurements{10};
 constexpr int SAMPLES {2048};
 constexpr size_t SAMPLES_IN_BYTES{SAMPLES*4};
@@ -182,7 +191,7 @@ constexpr uint16_t BUCKET_INDICES[]{1,2,3,4,5,6,7,9,11,13,15,17,19,21,24,27,30,3
 //double imag[SAMPLES];
 //arduinoFFT fft(real, imag, SAMPLES, SAMPLE_RATE_MICROPHONE);
 
-MP3::Player mp3player;
+
 
 
 class HAL_Impl : public HAL
@@ -190,16 +199,15 @@ class HAL_Impl : public HAL
 private:
     //config
     MODE_MOVEMENT_OR_FAN1SENSE mode_MOVEMENT_OR_FAN1SENSE;
-    MODE_HEATER_OR_LED_POWER mode_HEATER_OR_LED_POWER;//Heater mit 1Hz, LED mit 300Hz
-    MODE_FAN1_DRIVE_OR_SERVO1 mode_FAN1_DRIVE_OR_SERVO1; //FAN1 drive mit 100Hz, servo mit 50Hz
-
+    MODE_HEATER_OR_LED_POWER mode_HEATER_OR_LED_POWER{MODE_HEATER_OR_LED_POWER::HEATER};//Heater mit 1Hz, LED mit 300Hz
+    MODE_FAN1_OR_SERVO1 mode_FAN1_OR_SERVO1{MODE_FAN1_OR_SERVO1::SERVO1};
     //various
     esp_adc_cal_characteristics_t *adc_chars{nullptr};
     
     //management objects
     RGBLED<LED_NUMBER, DeviceType::WS2812> *strip{nullptr};
     cRotaryEncoder *rotenc{nullptr};
-    pcnt_unit_handle_t speedmeter{nullptr};
+    //pcnt_unit_handle_t speedmeter{nullptr};
     PD_UFP_core_c PD_UFP;//176byte
     hdc1080::M *hdc1080dev{nullptr};
     CCS811::M *ccs811dev{nullptr};
@@ -231,7 +239,7 @@ private:
     
     uint16_t ds4525doPressure;
     
-    
+#ifdef I2S_ACTIVE  
     void MP3Loop(){
         //sizeof(MP3::Player);64byte
         if(MD8002_ACTIVE){
@@ -244,7 +252,7 @@ private:
             mp3player.Loop();
         }
     }
-
+#endif
     void USBPDLoop(){
         PD_UFP.init(PD_POWER_OPTION_MAX_20V);
         while(true){
@@ -281,9 +289,9 @@ private:
         i = ~i;
         this->buttonState = i;
 
-        wifi_ap_record_t ap_info;
-        esp_wifi_sta_get_ap_info(&ap_info);
-        this->wifiRssiDb=ap_info.rssi;
+        //wifi_ap_record_t ap_info;
+        //esp_wifi_sta_get_ap_info(&ap_info);//TODO may only be called, when ESP32 is connected...
+        //this->wifiRssiDb=ap_info.rssi;
 
         //Es wird nicht unterschieden, ob der eingang "nur" zum Messen von analogen Spannung verwendet wird oder ob es sich um den Trigger-Eingang des Zeitrelais handelt. Im zweiten Fall muss einfach eine Zeitrelais-Schaltung basierend auf der Grenzüberschreitung des Analogen Messwertes in der Funktionsblock-Spache realisiert werden
         int analogIn = adc1_get_raw(CHANNEL_ANALOGIN_OR_ROTB);
@@ -379,9 +387,11 @@ private:
             if(GetMillis64() > nextBinaryAndAnalogReadout){
                 readBinaryAndAnalogIOs();
                 nextBinaryAndAnalogReadout = GetMillis64()+100;
+#ifdef I2S_ACTIVE
                 if(!mp3player.IsEmittingSamples()){
                     this->sound=0;
                 }
+#endif
             }
 
             if (GetMillis64() > nextOneWireReadout)
@@ -417,16 +427,10 @@ private:
         }
     }
 
-
 public:
     HAL_Impl(
-        MODE_MOVEMENT_OR_FAN1SENSE mode_MOVEMENT_OR_FAN1SENSE,
-        MODE_HEATER_OR_LED_POWER mode_HEATER_OR_LED_POWER,//Heater mit 1Hz, LED mit 300Hz
-        MODE_FAN1_DRIVE_OR_SERVO1 mode_FAN1_DRIVE_OR_SERVO1) //FAN1 drive mit 100Hz, servo mit 50Hz):ioConfig(defaultConfig)
-        :
-        mode_MOVEMENT_OR_FAN1SENSE(mode_MOVEMENT_OR_FAN1SENSE),
-        mode_HEATER_OR_LED_POWER(mode_HEATER_OR_LED_POWER),
-        mode_FAN1_DRIVE_OR_SERVO1(mode_FAN1_DRIVE_OR_SERVO1)
+        MODE_MOVEMENT_OR_FAN1SENSE mode_MOVEMENT_OR_FAN1SENSE):
+        mode_MOVEMENT_OR_FAN1SENSE(mode_MOVEMENT_OR_FAN1SENSE)
     {
     }
 
@@ -494,11 +498,13 @@ public:
     
     ErrorCode SetSound(int32_t soundNumber)
     {
+#ifdef I2S_ACTIVE
         if (soundNumber >= sizeof(SOUNDS) / sizeof(uint8_t*))
             soundNumber = 0;
         this->sound=soundNumber;
         mp3player.Play(SOUNDS[soundNumber], SONGS_LEN[soundNumber]);
         ESP_LOGI(TAG, "Set Sound to %d", soundNumber);
+#endif
         return ErrorCode::OK;
     }
 
@@ -562,7 +568,9 @@ public:
     }
 
     ErrorCode SetAnalogOutput(float volts){
+#ifdef I2S_ACTIVE
         mp3player.OutputConstantVoltage(volts);
+#endif
         return ErrorCode::OK;
     }
     
@@ -610,37 +618,14 @@ public:
     }
 
     ErrorCode UpdatePinConfiguration(uint8_t* configMessage, size_t configMessagelen){
-        if(configMessagelen!=sizeof(MessageConfig)){
-            ESP_LOGE(TAG, "configMessagelen %d!=sizeof(MessageConfig)", configMessagelen);
-            return ErrorCode::INDEX_OUT_OF_BOUNDS;
-        }
-        MessageConfig* cfg = (MessageConfig*)configMessage;
-        UpdatePinConfiguration(
-            false,
-            (MODE_MOVEMENT_OR_FAN1SENSE)cfg->mode_MOVEMENT_OR_FAN1SENSE,
-            (MODE_HEATER_OR_LED_POWER)cfg->mode_HEATER_OR_LED_POWER,
-            (MODE_FAN1_DRIVE_OR_SERVO1)cfg->mode_FAN1_DRIVE_OR_SERVO1
-        );
         return ErrorCode::OK;
     }
 
 //Annahme: Pins können sowohl digital konfiguriert sein als auch für eine analoge Spannungsmessung zuganglich sein
     ErrorCode UpdatePinConfiguration(
         bool forceReconfiguration,
-        MODE_MOVEMENT_OR_FAN1SENSE mode_MOVEMENT_OR_FAN1SENSE,
-        MODE_HEATER_OR_LED_POWER mode_HEATER_OR_LED_POWER,//Heater mit 1Hz, LED mit 300Hz
-        MODE_FAN1_DRIVE_OR_SERVO1 mode_FAN1_DRIVE_OR_SERVO1){
+        MODE_MOVEMENT_OR_FAN1SENSE mode_MOVEMENT_OR_FAN1SENSE){
         
-        if(forceReconfiguration || this->mode_HEATER_OR_LED_POWER!=mode_HEATER_OR_LED_POWER){
-            if(mode_HEATER_OR_LED_POWER==MODE_HEATER_OR_LED_POWER::HEATER){
-                mcpwm_set_frequency(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, 1);
-            }
-            else{
-                mcpwm_set_frequency(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, 300);
-            }
-            this->mode_HEATER_OR_LED_POWER=mode_HEATER_OR_LED_POWER;
-        }
-
         if(forceReconfiguration || this->mode_MOVEMENT_OR_FAN1SENSE!=mode_MOVEMENT_OR_FAN1SENSE){
             if(mode_MOVEMENT_OR_FAN1SENSE==MODE_MOVEMENT_OR_FAN1SENSE::MOVEMENT_SENSOR){
                 //pcnt_unit_stop(speedmeter);
@@ -648,19 +633,9 @@ public:
                 esp32::ConfigGpioInput(PIN_MOVEMENT_OR_FAN1SENSE, GPIO_FLOATING);
             }
             else if(mode_MOVEMENT_OR_FAN1SENSE==MODE_MOVEMENT_OR_FAN1SENSE::FAN1SENSE){
-                pcnt_unit_start(speedmeter);
+                //pcnt_unit_start(speedmeter);
             }
             this->mode_MOVEMENT_OR_FAN1SENSE=mode_MOVEMENT_OR_FAN1SENSE;
-        }
-
-        if(forceReconfiguration || this->mode_FAN1_DRIVE_OR_SERVO1 != mode_FAN1_DRIVE_OR_SERVO1){
-            if(mode_FAN1_DRIVE_OR_SERVO1==MODE_FAN1_DRIVE_OR_SERVO1::FAN1_DRIVE){
-                ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_FAN1, PIN_FAN1_DRIVE_OR_SERVO1));
-            }
-            else if(mode_FAN1_DRIVE_OR_SERVO1==MODE_FAN1_DRIVE_OR_SERVO1::SERVO1){
-                ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_SERVO1, PIN_FAN1_DRIVE_OR_SERVO1));
-            }
-            this->mode_FAN1_DRIVE_OR_SERVO1 = mode_FAN1_DRIVE_OR_SERVO1;
         }
         return ErrorCode::OK;
     }
@@ -702,8 +677,9 @@ public:
 
         //Rotary Encoder Input
         rotenc=new cRotaryEncoder(PIN_LDR_OR_ROTA, PIN_ANALOGIN_OR_ROTB);
-        rotenc->Init();
-        rotenc->Start();
+        ESP_ERROR_CHECK(rotenc->Init());
+        ESP_ERROR_CHECK(rotenc->Start());
+        
         //Relay K3 output
         gpio_set_level(PIN_K3_ON, 0);
         esp32::ConfigGpioOutputPP(PIN_K3_ON);
@@ -717,25 +693,37 @@ public:
         //ESP_ERROR_CHECK(pcnt_unit_enable(pcnt_unit));
         //TODO: Not yet implemented. Do it like the rotary Encoder
 
-            
-        //MCPWM for Servos
+    
+        //Hinweis (vermutlich schwer zu verstehen...:-()):
+        //- beim PIN_FAN1_DRIVE_OR_SERVO1 wird je nach Modus der GPIO vom einem zum anderen Timer umgeschaltet, weil es noch einen anderen FAN/Servo gibt und dessen freuqenz ja nicht beeinflusst werden darf
+        //- beim PIN_HEATER_OR_LED_POWER wird je nach Modus die Frequenz des Timers umgeschaltet, weil es nur einen Timer gibt
+        
+
+        ESP_ERROR_CHECK(mcpwm_group_set_resolution(MCPWM_UNIT_0, 1000000));
+        //MCPWM GPIO
+        if(mode_FAN1_OR_SERVO1==MODE_FAN1_OR_SERVO1::FAN1){
+            ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_FAN1, PIN_FAN1_DRIVE_OR_SERVO1));
+        }else if(mode_FAN1_OR_SERVO1==MODE_FAN1_OR_SERVO1::SERVO1){
+            ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_SERVO1, PIN_FAN1_DRIVE_OR_SERVO1));
+        }
+        ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_SERVO2, PIN_SPI_IO1_OR_SERVO2));       
+        ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_FAN2,   PIN_FAN2_DRIVE));
+        ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_HEATER_OR_LED_POWER, PIN_HEATER_OR_LED_POWER));
+        ESP_ERROR_CHECK(mcpwm_timer_set_resolution(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, 10000));
+
+        //MCPWM base config
         mcpwm_config_t pwm_config;
-        pwm_config.frequency = 50; //frequency = 50Hz, i.e. for every servo motor time period should be 20ms
         pwm_config.cmpr_a = 0;     //duty cycle of PWMxA = 0
         pwm_config.cmpr_b = 0;     //duty cycle of PWMxb = 0
         pwm_config.counter_mode = MCPWM_UP_COUNTER;
         pwm_config.duty_mode = MCPWM_DUTY_MODE_0;
-        ESP_ERROR_CHECK(mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_SERVO, &pwm_config));
-        mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_SERVO2, PIN_SPI_IO1_OR_SERVO2);
 
-        //MCPWM for Fans (same settings as servo)
+        pwm_config.frequency = FREQUENCY_SERVO;
+        ESP_ERROR_CHECK(mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_SERVO, &pwm_config));
+        pwm_config.frequency = FREQUENCY_FAN;
         ESP_ERROR_CHECK(mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_FAN, &pwm_config));
-        ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_FAN2, PIN_FAN2_DRIVE));
-        
-        //MCPWM for Heater and PowerLED
-        pwm_config.frequency = 5;
+        pwm_config.frequency = FREQUENCY_HEATER;
         ESP_ERROR_CHECK(mcpwm_init(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, &pwm_config));
-        ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_HEATER_OR_LED_POWER, PIN_HEATER_OR_LED_POWER));
 
         //I2C Master
         ESP_ERROR_CHECK(I2C::Init(I2C_PORT, PIN_I2C_SCL, PIN_I2C_SDA));
@@ -745,17 +733,14 @@ public:
         ESP_ERROR_CHECK(strip->Init(VSPI_HOST, PIN_LED_WS2812, 2 ));
         ESP_ERROR_CHECK(strip->Clear(100));
 
-        UpdatePinConfiguration(
-            true, 
-            this->mode_MOVEMENT_OR_FAN1SENSE,
-            this->mode_HEATER_OR_LED_POWER,
-            this->mode_FAN1_DRIVE_OR_SERVO1);
+        UpdatePinConfiguration(true, this->mode_MOVEMENT_OR_FAN1SENSE);
 
         readBinaryAndAnalogIOs();//do this while init to avoid race condition (wifimanager is resettet when red and green buttons are pressed during startup)
         xTaskCreate(sensorTask, "sensorTask", 4096 * 4, this, 6, nullptr);
         xTaskCreate(usbpdTask, "usbpdTask", 2048 * 4, this, 16, nullptr);
+#ifdef I2S_ACTIVE
         xTaskCreate(mp3Task, "mp3task", 6144 * 4, this, 16, nullptr); //Stack Size = 4096 --> Stack overflow!!
-        
+#endif
         return ErrorCode::OK;
     }
 
@@ -798,11 +783,10 @@ public:
         return ErrorCode::OK;
     }
 
-    ErrorCode ColorizeLed(uint8_t ledIndex, uint32_t color)
+    ErrorCode ColorizeLed(uint8_t ledIndex, CRGB colorCRGB)
     {
         if(ledIndex>=LED_NUMBER) return ErrorCode::INDEX_OUT_OF_BOUNDS;
-        CRGB colorCRGB(color);
-        strip->SetPixel(LED_NUMBER-ledIndex, colorCRGB);
+        strip->SetPixel(LED_NUMBER-ledIndex-1, colorCRGB);
         return ErrorCode::OK;
     }
 
@@ -820,21 +804,51 @@ public:
 
     ErrorCode SetHeaterDuty(float dutyInPercent)
     {
-        if(this->heaterEmergencyShutdown) return ErrorCode::EMERGENCY_SHUTDOWN;
-        mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_2, MCPWM_OPR_A, dutyInPercent);
+        if(this->heaterEmergencyShutdown){
+            ESP_ERROR_CHECK(mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, MCPWM_GEN_HEATER_OR_LED_POWER, 0));
+            return ErrorCode::EMERGENCY_SHUTDOWN;
+        }
+        if(mode_HEATER_OR_LED_POWER!=MODE_HEATER_OR_LED_POWER::HEATER){
+            ESP_ERROR_CHECK(mcpwm_set_frequency(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, FREQUENCY_HEATER));
+            mode_HEATER_OR_LED_POWER=MODE_HEATER_OR_LED_POWER::LED_POWER;
+        }
+        dutyInPercent=std::max(0.0f, dutyInPercent);
+        dutyInPercent=std::min(100.0f, dutyInPercent);
+        mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, MCPWM_GEN_HEATER_OR_LED_POWER, dutyInPercent);
         return ErrorCode::OK;
     }
 
     float GetHeaterState()
     {
-        return mcpwm_get_duty(MCPWM_UNIT_0, MCPWM_TIMER_2, MCPWM_OPR_A);
+        return mcpwm_get_duty(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, MCPWM_GEN_HEATER_OR_LED_POWER);
+    }
+
+    ErrorCode SetServo1Position(float angle_0_to_180)
+    {
+        if(mode_FAN1_OR_SERVO1!=MODE_FAN1_OR_SERVO1::SERVO1){
+            ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_SERVO1, PIN_FAN1_DRIVE_OR_SERVO1));
+            mode_FAN1_OR_SERVO1=MODE_FAN1_OR_SERVO1::SERVO1;
+        }
+        uint32_t cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (angle_0_to_180)) / (SERVO_MAX_DEGREE)));
+        esp_err_t err =  mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_SERVO, MCPWM_GEN_SERVO1, cal_pulsewidth);
+        return err==ESP_OK?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
+    }
+
+    ErrorCode SetServo2Position(float angle_0_to_180)
+    {
+        uint32_t cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (angle_0_to_180)) / (SERVO_MAX_DEGREE)));
+        esp_err_t err =  mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_SERVO, MCPWM_GEN_SERVO2, cal_pulsewidth);
+        return err==ESP_OK?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
     }
 
     ErrorCode SetFan1Duty(float dutyInPercent)
-    {
-        if(mode_FAN1_DRIVE_OR_SERVO1!=MODE_FAN1_DRIVE_OR_SERVO1::FAN1_DRIVE){
-            return ErrorCode::FUNCTION_NOT_AVAILABLE;
+    {               
+        if(mode_FAN1_OR_SERVO1!=MODE_FAN1_OR_SERVO1::FAN1){
+            ESP_ERROR_CHECK(mcpwm_gpio_init(MCPWM_UNIT_0, MCPWM_IO_FAN1, PIN_FAN1_DRIVE_OR_SERVO1));
+            mode_FAN1_OR_SERVO1=MODE_FAN1_OR_SERVO1::FAN1;
         }
+        dutyInPercent=std::max(0.0f, dutyInPercent);
+        dutyInPercent=std::min(100.0f, dutyInPercent);
         mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_FAN, MCPWM_GEN_FAN1, dutyInPercent);
         return ErrorCode::OK;
     }
@@ -858,11 +872,11 @@ public:
     ErrorCode SetLedPowerWhiteDuty(float dutyInPercent)
     {
         if(mode_HEATER_OR_LED_POWER!=MODE_HEATER_OR_LED_POWER::LED_POWER){
-            return ErrorCode::FUNCTION_NOT_AVAILABLE;
+            mcpwm_set_frequency(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, FREQUENCY_LED);
+            mode_HEATER_OR_LED_POWER=MODE_HEATER_OR_LED_POWER::LED_POWER;
         }
-        if (dutyInPercent > 100)
-            dutyInPercent = 100;
-
+        dutyInPercent=std::max(0.0f, dutyInPercent);
+        dutyInPercent=std::min(100.0f, dutyInPercent);
         mcpwm_set_duty(MCPWM_UNIT_0, MCPWM_TIMER_HEATER_OR_LED_POWER, MCPWM_GEN_HEATER_OR_LED_POWER, dutyInPercent);
         return ErrorCode::OK;
     }
@@ -885,23 +899,6 @@ public:
     bool IsMovementDetected()
     {
         return this->movementIsDetected;
-    }
-
-    ErrorCode SetServo1Position(float angle_0_to_180)
-    {
-        if(this->mode_FAN1_DRIVE_OR_SERVO1 != MODE_FAN1_DRIVE_OR_SERVO1::SERVO1){
-            return ErrorCode::FUNCTION_NOT_AVAILABLE;
-        }
-        uint32_t cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (angle_0_to_180)) / (SERVO_MAX_DEGREE)));
-        esp_err_t err =  mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_A, cal_pulsewidth);
-        return err==ESP_OK?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
-    }
-
-    ErrorCode SetServo2Position(float angle_0_to_180)
-    {
-        uint32_t cal_pulsewidth = (SERVO_MIN_PULSEWIDTH + (((SERVO_MAX_PULSEWIDTH - SERVO_MIN_PULSEWIDTH) * (angle_0_to_180)) / (SERVO_MAX_DEGREE)));
-        esp_err_t err =  mcpwm_set_duty_in_us(MCPWM_UNIT_0, MCPWM_TIMER_0, MCPWM_OPR_B, cal_pulsewidth);
-        return err==ESP_OK?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
     }
 
     float GetUSBCVoltage(){
@@ -934,12 +931,13 @@ public:
         HAL_Impl *hal = (HAL_Impl *)pvParameters;
         hal->SensorLoop();
     }
-
+#ifdef I2S_ACTIVE
     static void mp3Task(void *pvParameters)
     {
         HAL_Impl *hal = (HAL_Impl *)pvParameters;
         hal->MP3Loop();
     }
+#endif
 
     static void usbpdTask(void *pvParameters)
     {

@@ -277,7 +277,6 @@ public:
         strip = new RGBLED<LED_NUMBER, DeviceType::PL9823>();
         ESP_ERROR_CHECK(strip->Init(VSPI_HOST, PIN_LED_WS2812, 2 ));
         ESP_ERROR_CHECK(strip->Clear(100));
-        int i=0;
         ESP_ERROR_CHECK(strip->AnimatePixel(0, &blinkFastRedBlack));      
         //Configure Analog
         adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
@@ -323,11 +322,10 @@ public:
         return ErrorCode::OK;
     }
 
-    ErrorCode ColorizeLed(uint8_t ledIndex, uint32_t color)
+    ErrorCode ColorizeLed(uint8_t ledIndex, CRGB colorCRGB)
     {
         if(ledIndex>=LED_NUMBER-1) return ErrorCode::INDEX_OUT_OF_BOUNDS;
         ledIndex = (ledIndex+1)%LED_NUMBER;
-        CRGB colorCRGB(color);
         strip->SetPixel(ledIndex, colorCRGB);
         return ErrorCode::OK;
     }

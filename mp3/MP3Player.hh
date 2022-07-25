@@ -111,8 +111,8 @@ namespace MP3
                 return ESP_FAIL;
             }
             i2s_zero_dma_buffer(i2s_num);
-            i2s_set_sample_rates(i2s_num, 10000);
-            this->currentSampleRateHz = 10000;
+            i2s_set_sample_rates(i2s_num, 22050);
+            this->currentSampleRateHz = 22050;
             this->playerMode=PlayerMode::VOLTAGE;
             this->voltage=value<<8;
             return ESP_OK;
@@ -281,12 +281,12 @@ namespace MP3
             i2s_config.sample_rate = 44100;
             i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
             i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT; // 2-channels
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 5, 0)
             i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
             i2s_config.dma_desc_num = 8;
             i2s_config.dma_frame_num = 64; // MP3::SAMPLES_PER_FRAME/2; //Max 1024
 #else
-            i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_I2S_MSB;
+            i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
             i2s_config.dma_buf_count = 4,
             i2s_config.dma_buf_len = 128,
 #endif
@@ -317,12 +317,12 @@ namespace MP3
             i2s_config.sample_rate = 44100;
             i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
             i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 2, 0)
+#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 5, 0)
             i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
             i2s_config.dma_desc_num = 8;
             i2s_config.dma_frame_num = 64; // MP3::SAMPLES_PER_FRAME/2; //Max 1024
 #else
-            i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_I2S_MSB;
+            i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
             i2s_config.dma_buf_count = 4,
             i2s_config.dma_buf_len = 128,
 #endif

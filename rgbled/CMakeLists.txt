@@ -1,4 +1,5 @@
 idf_component_register(
-                       INCLUDE_DIRS "."
-                       )
+    INCLUDE_DIRS "."
+    REQUIRES "common" "esp_timer"
+    )
 

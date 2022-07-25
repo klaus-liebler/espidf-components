@@ -528,8 +528,6 @@ ErrorCode DeviceManager::CheckForNewExecutable()
     ESP_LOGI(TAG, "New executable Init Phase 3");
     return ErrorCode::OK;
 }
-
-
 ErrorCode DeviceManager::Loop()
 {
     static ExperimentMode previousExperimentMode = ExperimentMode::functionblock; //set in last line of this method
@@ -545,7 +543,7 @@ ErrorCode DeviceManager::Loop()
         hal->SetFan2Duty(0);
         hal->SetHeaterDuty(0);
         hal->SetServo1Position(0);
-        hal->SetAnalogOutput(0);
+        //hal->SetAnalogOutput(0); do not set a out voltage here as this may interfere with MP3 play
         this->setpointAirspeed=0;
         this->setpointFan2=0.0;
         this->setpointHeater=0.0;
@@ -584,10 +582,10 @@ ErrorCode DeviceManager::Loop()
         ptnPIDController->SetMode(Mode::OFF, nowMsSteady);
         float *voltages;
         hal->GetAnalogInputs(&voltages);
-        hal->ColorizeLed(0, CRGB::FromTemperature(0, 3.3, voltages[0]).raw32);
-        hal->ColorizeLed(1, CRGB::FromTemperature(0, 3.3, voltages[1]).raw32);
-        hal->ColorizeLed(2, CRGB::FromTemperature(0, 3.3, voltages[2]).raw32);
-        hal->ColorizeLed(3, CRGB::FromTemperature(0, 3.3, voltages[3]).raw32);
+        hal->ColorizeLed(0, CRGB::FromTemperature(0, 3.3, voltages[0]));
+        hal->ColorizeLed(1, CRGB::FromTemperature(0, 3.3, voltages[1]));
+        hal->ColorizeLed(2, CRGB::FromTemperature(0, 3.3, voltages[2]));
+        hal->ColorizeLed(3, CRGB::FromTemperature(0, 3.3, voltages[3]));
         hal->SetAnalogOutput(this->setpointVoltageOut);
     }
     else if(experimentMode==ExperimentMode::closedloop_ptn){
@@ -598,10 +596,10 @@ ErrorCode DeviceManager::Loop()
         }
         float *voltages;
         hal->GetAnalogInputs(&voltages);
-        hal->ColorizeLed(0, CRGB::FromTemperature(0, 3.3, voltages[0]).raw32);
-        hal->ColorizeLed(1, CRGB::FromTemperature(0, 3.3, voltages[1]).raw32);
-        hal->ColorizeLed(2, CRGB::FromTemperature(0, 3.3, voltages[2]).raw32);
-        hal->ColorizeLed(3, CRGB::FromTemperature(0, 3.3, voltages[3]).raw32);
+        hal->ColorizeLed(0, CRGB::FromTemperature(0, 3.3, voltages[0]));
+        hal->ColorizeLed(1, CRGB::FromTemperature(0, 3.3, voltages[1]));
+        hal->ColorizeLed(2, CRGB::FromTemperature(0, 3.3, voltages[2]));
+        hal->ColorizeLed(3, CRGB::FromTemperature(0, 3.3, voltages[3]));
         this->actualPtn=voltages[3];
         if(ptnPIDController->Compute(nowMsSteady)==ErrorCode::OK){ //OK means: Value changed
              ESP_LOGI(TAG, "Computed a new  setpointPtn %F", setpointVoltageOut);
@@ -682,7 +680,6 @@ ErrorCode DeviceManager::TriggerHeaterExperimentFunctionblock(HeaterExperimentDa
     data->SetpointTemperature=0;
     return ErrorCode::OK;
 }
-
 ErrorCode DeviceManager::TriggerPtnExperimentClosedLoop(float setpoint, float KP, float TN, float TV, float **data){
     //Trigger
     this->lastExperimentTrigger=hal->GetMillis();
@@ -715,7 +712,6 @@ ErrorCode DeviceManager::TriggerPtnExperimentFunctionblock(float **data){
     hal->GetAnalogInputs(data);
     return ErrorCode::OK;
 }
-
 ErrorCode DeviceManager::TriggerAirspeedExperimentClosedLoop(float setpointAirspeed, float setpointServo1, float KP, float TN, float TV, AirspeedExperimentData *data){
     //Trigger
     this->lastExperimentTrigger=hal->GetMillis();
@@ -758,7 +754,6 @@ ErrorCode DeviceManager::TriggerAirspeedExperimentFunctionblock(AirspeedExperime
     data->Servo=this->setpointServo1;
     return ErrorCode::OK;
 }
-
 ErrorCode DeviceManager::TriggerBorisUDP(uint8_t *requestU8, size_t requestLen, uint8_t* responseU8, size_t& responseLen){
     //Trigger
     this->lastExperimentTrigger=hal->GetMillis();

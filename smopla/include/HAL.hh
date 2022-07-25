@@ -4,6 +4,7 @@
 #include "sdkconfig.h"
 #include "esp_system.h"
 #include "errorcodes.hh"
+#include "crgb.hh"
 
 enum class Servo : uint8_t
 {
@@ -18,7 +19,8 @@ class HAL
         virtual ErrorCode InitAndRun()=0;
         virtual ErrorCode StartBuzzer(float freqHz)=0;
         virtual ErrorCode EndBuzzer()=0;
-        virtual ErrorCode ColorizeLed(uint8_t ledIndex, uint32_t color)=0;
+        virtual ErrorCode ColorizeLed(uint8_t ledIndex, CRGB color)=0;
+        ErrorCode ColorizeLed(uint8_t ledIndex, uint32_t color){return ColorizeLed(ledIndex, CRGB(color));}
         virtual ErrorCode UnColorizeAllLed()=0;
         virtual ErrorCode SetRelayState(bool state)=0;
         virtual ErrorCode SetHeaterDuty(float dutyInPercent)=0;

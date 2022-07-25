@@ -48,7 +48,7 @@ class I2CSensor{
         case STATE::INITIAL:
             if(ESP_OK!= I2C::IsAvailable(i2c_num, address_7bit)){
                 state = STATE::ERROR_NOT_FOUND;
-                ESP_LOGE(TAG, "state = STATE::ERROR_NOT_FOUND; return ErrorCode::DEVICE_NOT_RESPONDING");
+                ESP_LOGD(TAG, "state = STATE::ERROR_NOT_FOUND; return ErrorCode::DEVICE_NOT_RESPONDING");
                 return ErrorCode::DEVICE_NOT_RESPONDING;
             }
             state=STATE::FOUND;
@@ -57,7 +57,7 @@ class I2CSensor{
             e=Initialize(wait);
             if(e!=ESP_OK){
                 state = STATE::ERROR_COMMUNICATION;
-                 ESP_LOGE(TAG, "state = STATE::ERROR_COMMUNICATION; return ErrorCode::DEVICE_NOT_RESPONDING");
+                ESP_LOGD(TAG, "state = STATE::ERROR_COMMUNICATION; return ErrorCode::DEVICE_NOT_RESPONDING");
                 return ErrorCode::DEVICE_NOT_RESPONDING;
             }
             nextAction=currentMs+wait;

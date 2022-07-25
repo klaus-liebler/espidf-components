@@ -1,9 +1,11 @@
 #pragma once
 #include <stdio.h>
 #include <string.h>
+#include <common.hh>
 #include <esp_log.h>
 #include <driver/spi_master.h>
 #include <driver/gpio.h>
+#include <esp_timer.h>
 #include "crgb.hh"
 #include <array>
 #define TAG "RGBLED"
@@ -15,8 +17,8 @@ enum class DeviceType{
 
 class AnimationPattern{
 public:
-    virtual void Reset(tms_t now);
-    virtual CRGB Animate(tms_t now);
+    virtual void Reset(tms_t now)=0;
+    virtual CRGB Animate(tms_t now)=0;
 };
 
 class BlinkPattern:public AnimationPattern{
@@ -75,7 +77,7 @@ public:
         if(index>=LEDSIZE) return ESP_FAIL;
         patterns[index]=nullptr;
         if((this->table[index])!=(color.raw32)){
-            LOGD(TAG, "Set Index %d from %d to %d", index, table[index], color.raw32);
+            ESP_LOGD(TAG, "Set Index %d from %d to %d", index, table[index], color.raw32);
             this->table[index]=color.raw32;
             this->dirty=true;
         }
@@ -181,7 +183,7 @@ public:
         t.length = LED_DMA_BUFFER_SIZE * 8; //length is in bits
         t.tx_buffer = buffer;
 
-        LOGD(TAG, "Refreshing RGB-LED");
+        ESP_LOGD(TAG, "Refreshing RGB-LED");
         ESP_ERROR_CHECK(spi_device_transmit(this->spi_device_handle, &t));
         dirty=false;
         return ESP_OK;
