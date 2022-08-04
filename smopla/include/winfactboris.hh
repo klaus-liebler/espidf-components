@@ -43,7 +43,7 @@ namespace winfactboris{
 
             while (1)
             {
-                ESP_LOGI(TAG, "Waiting for data");
+                ESP_LOGD(TAG, "Waiting for data");
 
                 int rx_len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&source_addr, &socklen);
 

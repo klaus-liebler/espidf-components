@@ -120,19 +120,15 @@ private:
                         break;
                     case WIFIMGR::SimpleState::STA_CONNECTED:
                         strip->SetPixel(0, CRGB::DarkGreen);
-
                         break;
                     default:
                         break;
                     }
                     lastWifiState=newWifiState;
                 }
-
-            
-            strip->Refresh(100);  //checks internally, whether data is dirty and has to be pushed out
+                strip->Refresh(100);  //checks internally, whether data is dirty and has to be pushed out
             }
-
-            vTaskDelay(1);
+            vTaskDelay(pdMS_TO_TICKS(10));
         }
     }
 
@@ -145,10 +141,8 @@ public:
     ErrorCode OutputOneLineStatus(){
         uint32_t heap = esp_get_free_heap_size();
         bool but=GetButtonRedIsPressed();
-        float* analogVolt{nullptr};
-        GetAnalogInputs(&analogVolt);  
         ESP_LOGI(TAG, "Heap %6d BUTT %d ANAIN %4.1f %4.1f %4.1f %4.1f",
-                       heap,    but,    analogVolt[0], analogVolt[1],analogVolt[2],analogVolt[3]);
+                       heap,    but,    this->AnalogInputs[0], this->AnalogInputs[1], this->AnalogInputs[2], this->AnalogInputs[3]);
         return ErrorCode::OK;
     }
 

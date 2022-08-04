@@ -1,4 +1,5 @@
-idf_component_register(SRCS "dns_server.c"
-                    INCLUDE_DIRS "include"
-                    EMBED_FILES ../wifimanager_webui/dist_compressed/wifimanager.html.gz
-                    REQUIRES esp_hw_support driver)
+idf_component_register(
+    INCLUDE_DIRS "include"
+    EMBED_FILES ../wifimanager_webui/dist_compressed/wifimanager.html.gz
+    REQUIRES "common" "esp_http_server" "nvs_flash"
+	)

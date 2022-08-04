@@ -60,6 +60,12 @@ void WriteUInt16(uint16_t value, uint8_t *message, uint32_t offset)
 	*(message+offset+1) = *ptr2;
 }
 
+void WriteInt8(int8_t value, uint8_t *message, uint32_t offset)
+{
+	uint8_t* ptr1=(uint8_t*)&value;
+	*(message+offset) = *ptr1;
+}
+
 uint32_t ParseUInt32(const uint8_t * const message, uint32_t offset)
 {
 	uint32_t value;
@@ -105,8 +111,19 @@ float ParseFloat32(const uint8_t * const message, uint32_t offset)
 
 void WriteUInt32(uint32_t value, uint8_t *message, uint32_t offset)
 {
-	message[0+offset]=value&0xFF;
+	message[0+offset]=(value&0xFF)>> 0;
 	message[1+offset]=(value&0xFFFF)>> 8;
 	message[2+offset]=(value&0xFFFFFF)>> 16;
 	message[3+offset]=(value&0xFFFFFF)>> 24;
+}
+
+void WriteInt64(int64_t value, uint8_t *message, uint32_t offset){
+	message[0+offset]=(value&0xFF)>> 0;
+	message[1+offset]=(value&0xFFFF)>> 8;
+	message[2+offset]=(value&0xFFFFFF)>> 16;
+	message[3+offset]=(value&0xFFFFFFFF)>> 24;
+	message[4+offset]=(value&0xFFFFFFFFFF)>> 32;
+	message[5+offset]=(value&0xFFFFFFFFFFFF)>> 40;
+	message[6+offset]=(value&0xFFFFFFFFFFFFFF)>> 48;
+	message[7+offset]=(value&0xFFFFFFFFFFFFFFFF)>> 56;
 }

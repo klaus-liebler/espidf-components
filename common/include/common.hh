@@ -44,6 +44,13 @@ extern const size_t  x##_size asm(#x"_length");
         }                                                                                       \
     } while(0)
 
+#define GOTO_ERROR_ON_FALSE(a, format, ...) do { \
+        if (unlikely(!(a))) { \
+            ESP_LOGE(TAG, "%s(%d): " format, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+            goto error; \
+        } \
+    } while(0)
+
 #define RETURN_FAIL_ON_FALSE(a, format, ...) do {                             \
         if (unlikely(!(a))) {                                                                   \
             ESP_LOGE(TAG, "%s(%d): " format, __FUNCTION__, __LINE__, ##__VA_ARGS__);        \
@@ -112,6 +119,7 @@ constexpr const T clamp_kl( const T v, const T lo, const T hi)
     return v<lo?lo:v>hi?hi:v;
 }
 
+void WriteInt8(int8_t value, uint8_t *message, uint32_t offset);
 int16_t ParseInt16(const uint8_t * const message, uint32_t offset);
 
 void WriteInt16(int16_t value, uint8_t *message, uint32_t offset);
@@ -129,3 +137,5 @@ int32_t ParseInt32(const uint8_t * const message, uint32_t offset);
 void WriteUInt32(uint32_t value, uint8_t *message, uint32_t offset);
 
 float ParseFloat32(const uint8_t * const message, uint32_t offset);
+
+void WriteInt64(int64_t value, uint8_t *message, uint32_t offset);
