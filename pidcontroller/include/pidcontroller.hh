@@ -2,6 +2,7 @@
 
 #include <inttypes.h>
 #include <errorcodes.hh>
+#include <cmath>
 #include "esp_log.h"
 #define TAG "pidcontroller"
 
@@ -44,7 +45,13 @@ public:
     T input = *this->input;
 
     T Y_P = kp * (*this->setpoint - input);
-    this->Y_I += (ki * Y_P);
+    if(!std::isinf(ki)){
+      this->Y_I += (ki * Y_P);
+    }
+    if(std::isnan(this->Y_I)){
+      this->Y_I=0;
+    }
+    
     T Y_D = kd * (Y_P - last_Y_P);
 
     // limit integrator
@@ -132,8 +139,8 @@ private:
   int64_t cycleTimeMs;
 
   int64_t lastTimeMs;
-  T Y_I;
-  T last_Y_P;
+  T Y_I{0};
+  T last_Y_P{0};
 };
 
 #undef TAG

@@ -93,6 +93,6 @@
 #define RF_PWR_LOW  1
 #define RF_PWR_HIGH 2
 
-#define mirf_ADDR_LEN    5                        //Device addrees length:3~5 bytes
+#define mirf_ADDR_LEN    5                     //Device address length:3~5 bytes
 #define mirf_CONFIG ((0<<EN_CRC) | (0<<CRCO) ) //disable CRC and CRC data len=1;mirf_CONFIG ==0000B
 

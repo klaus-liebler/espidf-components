@@ -1,5 +1,13 @@
 #include "common.hh"
 
+
+
+bool GetBitInU8Buf(const uint8_t *buf, size_t offset, size_t bitIdx){
+    uint8_t b = buf[offset + (bitIdx>>3)];
+    uint32_t bitpos = bitIdx & 0b111;
+    return b & (1<<bitpos);
+}
+
 int16_t ParseInt16(const uint8_t * const message, uint32_t offset)
 {
 	int16_t step;

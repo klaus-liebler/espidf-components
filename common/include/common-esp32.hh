@@ -1,3 +1,5 @@
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include <driver/gpio.h>
 #include <esp_check.h>
 #include "common.hh"
@@ -5,6 +7,13 @@
 #define TAG "COMMON"
 
 namespace esp32{
+
+    constexpr int64_t ms2ticks(int64_t ms){
+        return (ms+portTICK_PERIOD_MS-1)/portTICK_PERIOD_MS;
+    }
+    void delayAtLeastMs(int64_t ms){
+        vTaskDelay(ms2ticks(ms));
+    }
 
 
     esp_err_t ConfigGpioInput(gpio_num_t gpio, gpio_pull_mode_t pullMode){

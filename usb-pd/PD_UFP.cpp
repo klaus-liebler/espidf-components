@@ -30,8 +30,12 @@ constexpr int t_PD_POLLING = 100;
 constexpr int t_TypeCSinkWaitCap =     350;
 constexpr int t_RequestToPSReady  =    580;     // combine t_SenderResponse and t_PSTransition
 constexpr int t_PPSRequest        =   5000;    // must less than 10000 (10s)
-
+#if CONFIG_IDF_TARGET_ESP32
 constexpr gpio_num_t PIN_FUSB302_INT = GPIO_NUM_23;
+#elif CONFIG_IDF_TARGET_ESP32S3
+constexpr gpio_num_t PIN_FUSB302_INT = GPIO_NUM_43;
+#endif
+
 
 enum {
     STATUS_LOG_MSG_TX,

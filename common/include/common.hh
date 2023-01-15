@@ -10,6 +10,10 @@ extern const uint8_t x##_start[] asm("_binary_" #x "_start");\
 extern const uint8_t x##_end[] asm("_binary_" #x "_end");\
 extern const size_t  x##_size asm(#x"_length");
 
+constexpr uint64_t IO(int n){
+    return (1ULL<<n);
+}
+
 #define BREAK_ON_ERROR(x, format, ...) do {                               \
         esp_err_t err_rc_ = (x);                                                                \
         if (unlikely(err_rc_ != ESP_OK)) {                                                      \
@@ -35,6 +39,14 @@ extern const size_t  x##_size asm(#x"_length");
         }                                                                                       \
     } while(0)
 
+#define RETURN_ERRORCODE_ON_ERROR(x, errorCode) do {                                       \
+        esp_err_t err_rc_ = (x);                                                                \
+        if (err_rc_ != ESP_OK) {                                                      \
+            ESP_LOGE(TAG, "%s(%d): Function returned %d!", __FUNCTION__, __LINE__, (int)err_rc_);        \
+            return errorCode;                                                                     \
+        }                                                                                       \
+    } while(0)
+
 #define GOTO_ERROR_ON_ERROR(x, format, ...) do {                               \
         esp_err_t err_rc_ = (x);                                                                \
         if (unlikely(err_rc_ != ESP_OK)) {                                                      \
@@ -57,6 +69,17 @@ extern const size_t  x##_size asm(#x"_length");
             return ESP_FAIL;                                                                    \
         }                                                                                       \
     } while(0)
+
+
+#define ERRORCODE_CHECK(x)                                        \
+    do                                                            \
+    {                                                             \
+        ErrorCode __err_rc = (x);                                 \
+        if (__err_rc != ErrorCode::OK)                            \
+        {                                                         \
+            printf("Error %d occured in File %s in line %d in expression %s", (int)__err_rc, __FILE__, __LINE__, #x);\
+        }                                                         \
+    } while (0)
 
 typedef uint8_t u8;
 typedef uint16_t u16;
@@ -113,11 +136,17 @@ bool GetBitInU8Array(const std::array<uint8_t, K> *arr, size_t offset, size_t bi
     return b & (1<<bitpos);
 }
 
+
+
 template<class T>
 constexpr const T clamp_kl( const T v, const T lo, const T hi)
 {
     return v<lo?lo:v>hi?hi:v;
 }
+
+
+
+bool GetBitInU8Buf(const uint8_t *buf, size_t offset, size_t bitIdx);
 
 void WriteInt8(int8_t value, uint8_t *message, uint32_t offset);
 int16_t ParseInt16(const uint8_t * const message, uint32_t offset);

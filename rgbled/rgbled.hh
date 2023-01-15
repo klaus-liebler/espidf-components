@@ -13,6 +13,7 @@
 enum class DeviceType{
     WS2812, 
     PL9823,
+    SK6805,
 };
 
 class AnimationPattern{
@@ -177,6 +178,36 @@ public:
                 buffer[n++] = LedBitPattern[0x0f & (temp >>20)];
                 buffer[n++] = LedBitPattern[0x0f & (temp)>>16];
             }
+
+            else if(DEVICE==DeviceType::SK6805){
+                static const uint16_t LedBitPattern[16] = {
+                    0x8888,
+                    0x8E88,
+                    0xE888,
+                    0xEE88,
+                    0x888E,
+                    0x8E8E,
+                    0xE88E,
+                    0xEE8E,
+                    0x88E8,
+                    0x8EE8,
+                    0xE8E8,
+                    0xEEE8,
+                    0x88EE,
+                    0x8EEE,
+                    0xE8EE,
+                    0xEEEE
+                };
+                //G
+                buffer[n++] = LedBitPattern[0x0f & (temp >>12)];
+                buffer[n++] = LedBitPattern[0x0f & (temp)>>8];
+                //R
+                buffer[n++] = LedBitPattern[0x0f & (temp >>4)];
+                buffer[n++] = LedBitPattern[0x0f & (temp)];
+                //B
+                buffer[n++] = LedBitPattern[0x0f & (temp >>20)];
+                buffer[n++] = LedBitPattern[0x0f & (temp)>>16];
+            }
         }
 
         spi_transaction_t t={};
@@ -198,7 +229,7 @@ public:
         return Refresh(timeout_ms);
     }
    
-    esp_err_t Init(const spi_host_device_t spi_host, const gpio_num_t gpio, const int dma_channel){
+    esp_err_t Init(const spi_host_device_t spi_host, const gpio_num_t gpio, const spi_dma_chan_t dma_channel){
         spi_bus_config_t bus_config={};
         bus_config.miso_io_num=GPIO_NUM_NC;
         bus_config.mosi_io_num=gpio;
@@ -212,6 +243,9 @@ public:
             dev_config.clock_speed_hz=3.2*1000*1000;
         else if(DEVICE==DeviceType::PL9823){
             dev_config.clock_speed_hz=2352941;//to reach a cycle time of 0.425us
+        }
+        else if(DEVICE==DeviceType::SK6805){
+            dev_config.clock_speed_hz=3.2*1000*1000; //3.2MHz -->800kHz bit timing and one "spi bit" is 312,5ns
         }
         dev_config.mode=0,
         dev_config.spics_io_num=GPIO_NUM_NC;

@@ -1,30 +1,36 @@
 #pragma once
+
 #include <string.h>
 #include <common.hh>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
-#include <freertos/event_groups.h>
 #include <freertos/timers.h>
 #include <esp_system.h>
 #include <esp_check.h>
-#include <esp_mac.h>
-#include <esp_wifi.h>
-#include <esp_event.h>
 #include <esp_netif.h>
-#include <esp_wifi_types.h>
+#ifdef USE_ETH
+#include <esp_eth.h>
+#include <esp_eth_mac.h>
+#include <esp_eth_phy.h>
+#include <esp_eth_netif_glue.h>
+#endif
+#include <esp_wifi.h>
+
+#include <esp_event.h>
 #include <esp_http_server.h>
 #include <esp_log.h>
 #include <nvs_flash.h>
 #include <lwip/err.h>
 #include <lwip/sys.h>
 #include <lwip/api.h>
-#include <lwip/err.h>
 #include <lwip/netdb.h>
 #include <lwip/ip4_addr.h>
 #include <driver/gpio.h>
 #include <nvs.h>
 #include <esp_spi_flash.h>
+#include <esp_sntp.h>
+#include <time.h>
 
 #define TAG "WIFIMGR"
 
@@ -47,7 +53,7 @@ namespace WIFIMGR
 
     constexpr wifi_auth_mode_t AP_AUTHMODE{wifi_auth_mode_t::WIFI_AUTH_WPA2_PSK};
 
-    constexpr int ATTEMPTS_TO_RECONNECT {5};
+    constexpr int ATTEMPTS_TO_RECONNECT{5};
 
     constexpr char UNIT_SEPARATOR{0x1F};
     constexpr char RECORD_SEPARATOR{0x1E};
@@ -60,9 +66,16 @@ namespace WIFIMGR
     enum class STA_STATE
     {
         NO_CONNECTION,
-        SHOULD_CONNECT,      // Daten sind verfügbar, die passen könnten. Es soll beim nächsten Retry-Tick ein Verbindungsversuch gestartet werden. Gerade im Moment wurde aber noch kein Verbindungsversiuch gestartet. -->Scan möglich
+        SHOULD_CONNECT,   // Daten sind verfügbar, die passen könnten. Es soll beim nächsten Retry-Tick ein Verbindungsversuch gestartet werden. Gerade im Moment wurde aber noch kein Verbindungsversiuch gestartet. -->Scan möglich
         ABOUT_TO_CONNECT, // es wurde gerade ein Verbindungsaufbau gestartet, es ist aber noch nicht klar, ob der erfolgreich war -->Scan nicht möglich
         CONNECTED,
+    };
+
+    enum class NETWORK_MODE
+    {
+        WIFI_ONLY,
+        ETH_ONLY,
+        WIFI_AND_ETH,
     };
 
     /**
@@ -80,13 +93,14 @@ namespace WIFIMGR
     };
 
     STA_STATE staState{STA_STATE::NO_CONNECTION};
-    //bool accessPointIsActive{false}; // nein, diese Information kann über esp_wifi_get_mode() immer herausgefunden werden
+    // bool accessPointIsActive{false}; // nein, diese Information kann über esp_wifi_get_mode() immer herausgefunden werden
     bool scanIsActive{false};
     int remainingAttempsToConnectAsSTA{0};
 
-    esp_netif_t *wifi_netif_sta = nullptr;
-    esp_netif_t *wifi_netif_ap = nullptr;
-
+    esp_netif_t *wifi_netif_sta{nullptr};
+    esp_netif_t *wifi_netif_ap{nullptr};
+    esp_netif_t *eth_netif{nullptr};
+    
     wifi_config_t wifi_config_sta = {}; // 132byte
     wifi_config_t wifi_config_ap = {};  // 132byte
     wifi_scan_config_t scan_config;     // 28byte
@@ -113,7 +127,7 @@ namespace WIFIMGR
         esp_wifi_scan_stop(); // for sanity
         ESP_LOGI(TAG, "Calling esp_wifi_connect() for WIFI_IF_STA with ssid %s and password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password);
         ESP_ERROR_CHECK(esp_wifi_connect());
-        staState=STA_STATE::ABOUT_TO_CONNECT;
+        staState = STA_STATE::ABOUT_TO_CONNECT;
     }
 
     esp_err_t delete_sta_config()
@@ -179,7 +193,7 @@ namespace WIFIMGR
         size_t sz;
         GOTO_ERROR_ON_ERROR(nvs_open(wifi_manager_nvs_namespace, NVS_READWRITE, &handle), "Unable to open nvs partition");
         sz = sizeof(wifi_config_sta.sta.ssid);
-        ret = nvs_get_str(handle, "ssid", (char*)wifi_config_sta.sta.ssid, &sz);
+        ret = nvs_get_str(handle, "ssid", (char *)wifi_config_sta.sta.ssid, &sz);
         if (ret != ESP_OK)
         {
             ESP_LOGI(TAG, "Unable to read ssid");
@@ -187,7 +201,7 @@ namespace WIFIMGR
         }
 
         sz = sizeof(wifi_config_sta.sta.password);
-        ret = nvs_get_str(handle, "password", (char*)wifi_config_sta.sta.password, &sz);
+        ret = nvs_get_str(handle, "password", (char *)wifi_config_sta.sta.password, &sz);
         if (ret != ESP_OK)
         {
             ESP_LOGI(TAG, "Unable to read password");
@@ -199,7 +213,7 @@ namespace WIFIMGR
         nvs_close(handle);
         return ret;
     }
-  
+
     void wifi_manager_timer_retry_cb(TimerHandle_t xTimer)
     {
         ESP_LOGI(TAG, "Retry Timer Tick!");
@@ -231,7 +245,7 @@ namespace WIFIMGR
         case WIFI_EVENT_SCAN_DONE:
         {
             ESP_LOGD(TAG, "WIFI_EVENT_SCAN_DONE");
-            scanIsActive=false;
+            scanIsActive = false;
             wifi_event_sta_scan_done_t *event_sta_scan_done = (wifi_event_sta_scan_done_t *)event_data;
             if (event_sta_scan_done->status == 1)
                 break; // break, falls der Scan nicht erfolgreich abgeschlossen wurde (wegen Abbruch oder einem voreiligen Neustart)
@@ -253,12 +267,12 @@ namespace WIFIMGR
             switch (staState)
             {
             case STA_STATE::NO_CONNECTION:
-                ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED, when STA_STATE::NO_CONNECTION --> disconnection was requested by user. Start Access Point"); 
+                ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED, when STA_STATE::NO_CONNECTION --> disconnection was requested by user. Start Access Point");
                 urc = UPDATE_REASON_CODE::USER_DISCONNECT;
                 ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
                 break;
             case STA_STATE::CONNECTED:
-                ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED, when STA_STATE::CONNECTED --> unexpected disconnection. Try to reconnect %d times.", ATTEMPTS_TO_RECONNECT); 
+                ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED, when STA_STATE::CONNECTED --> unexpected disconnection. Try to reconnect %d times.", ATTEMPTS_TO_RECONNECT);
                 // Die Verbindung bestand zuvor und wurde jetzt getrennt. Versuche, erneut zu verbinden
                 urc = UPDATE_REASON_CODE::LOST_CONNECTION;
                 staState = STA_STATE::SHOULD_CONNECT;
@@ -267,15 +281,17 @@ namespace WIFIMGR
                 break;
             case STA_STATE::ABOUT_TO_CONNECT:
                 remainingAttempsToConnectAsSTA--;
-                //Die Verbindung war bereits getrennt und es wurd über den Retry Timer versucht, diese neu aufzubauen. Das schlug fehl
+                // Die Verbindung war bereits getrennt und es wurd über den Retry Timer versucht, diese neu aufzubauen. Das schlug fehl
                 urc = UPDATE_REASON_CODE::LOST_CONNECTION;
-                if(remainingAttempsToConnectAsSTA<=0){
+                if (remainingAttempsToConnectAsSTA <= 0)
+                {
                     ESP_LOGW(TAG, "After (several?) attemps it was not possible to establish connection as STA with ssid %s and password %s (Reason %d). Start AccessPoint mode with ssid %s and password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password, wifi_event_sta_disconnected->reason, wifi_config_ap.ap.ssid, wifi_config_ap.ap.password);
                     staState = STA_STATE::NO_CONNECTION;
                     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
                 }
-                else{
-                    ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED, when STA_STATE::ABOUT_TO_CONNECT --> disconnection occured earlier and we tried to establish it again...which was not successful (Reason %d). Still %d attempt(s) to go.", wifi_event_sta_disconnected->reason, remainingAttempsToConnectAsSTA); 
+                else
+                {
+                    ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED, when STA_STATE::ABOUT_TO_CONNECT --> disconnection occured earlier and we tried to establish it again...which was not successful (Reason %d). Still %d attempt(s) to go.", wifi_event_sta_disconnected->reason, remainingAttempsToConnectAsSTA);
                     staState = STA_STATE::SHOULD_CONNECT;
                     xTimerStart(wifi_manager_retry_timer, portMAX_DELAY);
                 }
@@ -292,15 +308,14 @@ namespace WIFIMGR
             esp_netif_ip_info_t ip_info = {};
             esp_netif_get_ip_info(wifi_netif_ap, &ip_info);
             ESP_LOGI(TAG, "Successfully started Access Point with ssid %s and password %s. Website is here: http://" IPSTR " . Wifimanager is here: http://" IPSTR "/wifimanager", wifi_config_ap.ap.ssid, wifi_config_ap.ap.password, IP2STR(&ip_info.ip), IP2STR(&ip_info.ip));
-            
-                
-            apAvailable=true;   
+
+            apAvailable = true;
             break;
         }
         case WIFI_EVENT_AP_STOP:
         {
-            ESP_LOGI(TAG, "Successfully closed Access Point.");    
-            apAvailable=false;
+            ESP_LOGI(TAG, "Successfully closed Access Point.");
+            apAvailable = false;
             break;
         }
         case WIFI_EVENT_AP_STACONNECTED:
@@ -316,6 +331,47 @@ namespace WIFIMGR
             break;
         }
         }
+    }
+
+#ifdef USE_ETH
+    static void eth_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
+    {
+        uint8_t mac_addr[6] = {0};
+        /* we can get the ethernet driver handle from event data */
+        esp_eth_handle_t eth_handle = *(esp_eth_handle_t *)event_data;
+
+        switch (event_id)
+        {
+        case ETHERNET_EVENT_CONNECTED:
+            esp_eth_ioctl(eth_handle, ETH_CMD_G_MAC_ADDR, mac_addr);
+            ESP_LOGI(TAG, "Ethernet Link Up");
+            ESP_LOGI(TAG, "Ethernet HW Addr %02x:%02x:%02x:%02x:%02x:%02x",
+                     mac_addr[0], mac_addr[1], mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
+            break;
+        case ETHERNET_EVENT_DISCONNECTED:
+            ESP_LOGI(TAG, "Ethernet Link Down");
+            break;
+        case ETHERNET_EVENT_START:
+            ESP_LOGI(TAG, "Ethernet Started");
+            break;
+        case ETHERNET_EVENT_STOP:
+            ESP_LOGI(TAG, "Ethernet Stopped");
+            break;
+        default:
+            break;
+        }
+    }
+#endif
+    static void time_sync_notification_cb(struct timeval *tv)
+    {
+        time_t now;
+        char strftime_buf[64];
+        struct tm timeinfo;
+
+        time(&now);
+        localtime_r(&now, &timeinfo);
+        strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
+        ESP_LOGI(TAG, "Notification of a time synchronization. The current date/time in Berlin is: %s", strftime_buf);
     }
 
     static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
@@ -337,18 +393,18 @@ namespace WIFIMGR
         case IP_EVENT_STA_GOT_IP:
         {
             ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP");
-            ip_event_got_ip_t *ip_event_got_ip = (ip_event_got_ip_t *)malloc(sizeof(ip_event_got_ip_t));
-            *ip_event_got_ip = *((ip_event_got_ip_t *)event_data);
-            staState=STA_STATE::CONNECTED;
+            staState = STA_STATE::CONNECTED;
             update_sta_config_lazy();
             xSemaphoreTake(wifi_manager_mutex, portMAX_DELAY);
             urc = UPDATE_REASON_CODE::CONNECTION_ESTABLISHED;
             wifi_mode_t mode;
             esp_wifi_get_mode(&mode);
-            if(mode==WIFI_MODE_APSTA){
-                 xTimerStart(wifi_manager_shutdown_ap_timer, portMAX_DELAY);
+            if (mode == WIFI_MODE_APSTA)
+            {
+                xTimerStart(wifi_manager_shutdown_ap_timer, portMAX_DELAY);
             }
             xSemaphoreGive(wifi_manager_mutex);
+            sntp_init();
             break;
         }
         /* This event arises when the IPV4 address become invalid.
@@ -358,8 +414,28 @@ namespace WIFIMGR
          * Generally the application don’t need to care about this event, it is just a debug event to let the application
          * know that the IPV4 address is lost. */
         case IP_EVENT_STA_LOST_IP:
+        {
             ESP_LOGI(TAG, "IP_EVENT_STA_LOST_IP");
             break;
+        }
+
+        case IP_EVENT_ETH_GOT_IP:
+        {
+            ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
+            const esp_netif_ip_info_t *ip_info = &event->ip_info;
+            const char *hostname;
+            esp_netif_get_hostname(eth_netif, &hostname);
+            ESP_LOGI(TAG, "IP_EVENT_ETH_GOT_IP with hostname %s: ETHIP:" IPSTR " ETHMASK:" IPSTR " ETHGW:" IPSTR,
+                     hostname, IP2STR(&ip_info->ip), IP2STR(&ip_info->netmask), IP2STR(&ip_info->gw));
+            sntp_init();
+            break;
+        }
+
+        case IP_EVENT_ETH_LOST_IP:
+        {
+            ESP_LOGI(TAG, "IP_EVENT_ETH_LOST_IP");
+            break;
+        }
         }
     }
 
@@ -373,15 +449,15 @@ namespace WIFIMGR
 
     esp_err_t handle_delete_wifimanager(httpd_req_t *req)
     {
-        ESP_LOGI(TAG, "Received HTTP request to delete wifi credentials. Wait 2000ms till actually disconnect...");     
+        ESP_LOGI(TAG, "Received HTTP request to delete wifi credentials. Wait 2000ms till actually disconnect...");
         httpd_resp_set_hdr(req, "Access-Control-Allow-Origin", "*");
         httpd_resp_sendstr(req, "Connection deleted successfully");
         vTaskDelay(pdMS_TO_TICKS(2000)); // warte 200ms, um die Beantwortung des Requests noch zu ermöglichen
         xSemaphoreTake(wifi_manager_mutex, portMAX_DELAY);
-        staState=STA_STATE::NO_CONNECTION;
+        staState = STA_STATE::NO_CONNECTION;
         ESP_ERROR_CHECK(esp_wifi_disconnect());
         delete_sta_config();
-        ESP_LOGI(TAG, "Disconnected as STA from ssid %s.", wifi_config_sta.sta.ssid);             
+        ESP_LOGI(TAG, "Disconnected as STA from ssid %s.", wifi_config_sta.sta.ssid);
         xSemaphoreGive(wifi_manager_mutex);
         return ESP_OK;
     }
@@ -390,7 +466,7 @@ namespace WIFIMGR
     {
         esp_err_t ret{ESP_OK};
         RETURN_FAIL_ON_FALSE(req->content_len < http_buffer_len, "req->content_len(%d) < http_buffer_len(%d)", req->content_len, http_buffer_len);
-
+        RETURN_FAIL_ON_FALSE(wifi_netif_sta !=nullptr || wifi_netif_ap!=nullptr, "Wifi not initialized");
         char *buf = (char *)http_buffer;
         int received = httpd_req_recv(req, buf, http_buffer_len);
         RETURN_FAIL_ON_FALSE(received == req->content_len, "received (%d) == req->content_len (%d)", received, req->content_len);
@@ -409,24 +485,25 @@ namespace WIFIMGR
         ptr = strtok(buf, delimiter);
         ESP_GOTO_ON_FALSE(ptr, ESP_FAIL, response, TAG, "In handle_post_wifimanager(): no ssid found");
         len = strlen(ptr);
-        ESP_GOTO_ON_FALSE(len <= MAX_SSID_LEN-1, ESP_FAIL, response, TAG, "SSID too long");
-        snprintf((char *)wifi_config_sta.sta.ssid, MAX_SSID_LEN-1, ptr);
+        ESP_GOTO_ON_FALSE(len <= MAX_SSID_LEN - 1, ESP_FAIL, response, TAG, "SSID too long");
+        snprintf((char *)wifi_config_sta.sta.ssid, MAX_SSID_LEN - 1, ptr);
         ptr = strtok(NULL, delimiter);
         ESP_GOTO_ON_FALSE(ptr, ESP_FAIL, response, TAG, "In handle_post_wifimanager(): no password found");
         len = strlen(ptr);
-        ESP_GOTO_ON_FALSE(len <= MAX_PASSPHRASE_LEN-1, ESP_FAIL, response, TAG, "PASSPHRASE too long");
-        snprintf((char *)wifi_config_sta.sta.password, MAX_PASSPHRASE_LEN-1, ptr);
+        ESP_GOTO_ON_FALSE(len <= MAX_PASSPHRASE_LEN - 1, ESP_FAIL, response, TAG, "PASSPHRASE too long");
+        snprintf((char *)wifi_config_sta.sta.password, MAX_PASSPHRASE_LEN - 1, ptr);
         ESP_LOGI(TAG, "Got a new SSID %s and PASSWORD %s from browser. wifi_config_sta is marked dirty.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password);
-        remainingAttempsToConnectAsSTA=1;
+        remainingAttempsToConnectAsSTA = 1;
         connectAsSTA();
     response:
         esp_netif_ip_info_t ip_info = {};
         esp_netif_get_ip_info(wifi_netif_sta, &ip_info);
         const char *hostname;
         esp_netif_get_hostname(wifi_netif_sta, &hostname);
-        wifi_ap_record_t ap={};
-        ap.rssi=0;
-        if(staState==STA_STATE::CONNECTED){
+        wifi_ap_record_t ap = {};
+        ap.rssi = 0;
+        if (staState == STA_STATE::CONNECTED)
+        {
             esp_wifi_sta_get_ap_info(&ap);
         }
         pos += snprintf(buf + pos, http_buffer_len - pos, "%s%c%s%c%s%c%d%c" IPSTR "%c" IPSTR "%c" IPSTR "%c%d%c", wifi_config_ap.ap.ssid, UNIT_SEPARATOR, hostname, UNIT_SEPARATOR, wifi_config_sta.sta.ssid, UNIT_SEPARATOR, ap.rssi, UNIT_SEPARATOR, IP2STR(&ip_info.ip), UNIT_SEPARATOR, IP2STR(&ip_info.netmask), UNIT_SEPARATOR, IP2STR(&ip_info.gw), UNIT_SEPARATOR, (int)urc, RECORD_SEPARATOR);
@@ -443,11 +520,11 @@ namespace WIFIMGR
         }
         urc = UPDATE_REASON_CODE::NO_CHANGE;
         // init a scan, if there is no scan active right now and the system is not establishing a connection right now
-        
-        if (!scanIsActive && staState!=STA_STATE::ABOUT_TO_CONNECT)
+
+        if (!scanIsActive && staState != STA_STATE::ABOUT_TO_CONNECT)
         {
             esp_wifi_scan_start(&scan_config, false);
-            scanIsActive=true;
+            scanIsActive = true;
         }
         xSemaphoreGive(wifi_manager_mutex);
         httpd_resp_set_type(req, "text/plain");
@@ -479,27 +556,15 @@ namespace WIFIMGR
         .user_ctx = nullptr,
     };
 
-    esp_err_t InitAndRun(bool resetStoredConnection, uint8_t *http_request_response_buffer, size_t http_request_response_buffer_len)
+    esp_err_t initWifi(bool resetStoredWifiConnection)
     {
-        http_buffer = http_request_response_buffer;
-        http_buffer_len = http_request_response_buffer_len;
-        if (wifi_manager_mutex != nullptr)
-        {
-            ESP_LOGE(TAG, "wifi manager already started");
-            return ESP_FAIL;
-        }
         if (strlen(CONFIG_NETWORK_WIFI_AP_PASSWORD) < 8 && AP_AUTHMODE != WIFI_AUTH_OPEN)
         {
             ESP_LOGE(TAG, "Password too short for authentication. Minimal length is %d", 8);
             return ESP_FAIL;
         }
-
-        wifi_manager_mutex = xSemaphoreCreateMutex();
-
         wifi_manager_retry_timer = xTimerCreate("retry timer", pdMS_TO_TICKS(WIFI_MANAGER_RETRY_TIMER), pdFALSE, (void *)0, wifi_manager_timer_retry_cb);
         wifi_manager_shutdown_ap_timer = xTimerCreate("shutdown_ap_timer", pdMS_TO_TICKS(WIFI_MANAGER_SHUTDOWN_AP_TIMER), pdFALSE, (void *)0, wifi_manager_timer_shutdown_ap_cb);
-        ESP_ERROR_CHECK(esp_netif_init());
-        ESP_ERROR_CHECK(esp_event_loop_create_default());
 
         // Create and check netifs
         wifi_netif_sta = esp_netif_create_default_wifi_sta();
@@ -507,14 +572,13 @@ namespace WIFIMGR
         assert(wifi_netif_sta);
         assert(wifi_netif_ap);
 
+        // attach event handler for wifi
+        ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
+
         // init WIFI base
         wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
         ESP_ERROR_CHECK(esp_wifi_init(&cfg));
         ESP_ERROR_CHECK(esp_wifi_set_storage(WIFI_STORAGE_RAM));
-
-        // attach event handlers
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
-        ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, NULL));
 
         // Prepare WIFI_CONFIGs for ap mode and for sta mode and for scan
         wifi_config_sta.sta.scan_method = WIFI_FAST_SCAN;
@@ -558,17 +622,20 @@ namespace WIFIMGR
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config_ap));
         ESP_ERROR_CHECK(esp_wifi_set_ps(WIFI_PS_NONE));
 
-        if (resetStoredConnection)
+        if (resetStoredWifiConnection)
         {
-            ESP_LOGI(TAG, "Forced to delete saved wifi configuration.");
-            delete_sta_config();  
+            ESP_LOGI(TAG, "Forced to delete saved wifi configuration. Starting access point and do an initial scan.");
+            delete_sta_config();
+            ESP_ERROR_CHECK(esp_wifi_start());
+            esp_wifi_scan_start(&scan_config, false);
+            scanIsActive = true;
         }
-        if(resetStoredConnection || read_sta_config() != ESP_OK)
+        else if (read_sta_config() != ESP_OK)
         {
             ESP_LOGI(TAG, "No saved wifi configuration found on startup. Starting access point and do an initial scan.");
             ESP_ERROR_CHECK(esp_wifi_start());
             esp_wifi_scan_start(&scan_config, false);
-            scanIsActive=true;
+            scanIsActive = true;
         }
         else
         {
@@ -577,24 +644,99 @@ namespace WIFIMGR
             ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config_sta));
             ESP_ERROR_CHECK(esp_wifi_start());
             esp_wifi_scan_start(&scan_config, true);
-            remainingAttempsToConnectAsSTA=ATTEMPTS_TO_RECONNECT;
+            remainingAttempsToConnectAsSTA = ATTEMPTS_TO_RECONNECT;
             ESP_ERROR_CHECK(esp_wifi_connect());
-            staState=STA_STATE::ABOUT_TO_CONNECT;
+            staState = STA_STATE::ABOUT_TO_CONNECT;
         }
-        
-        ESP_LOGI(TAG, "Network Manager successfully started");
         return ESP_OK;
     }
 
-    enum class SimpleState{
+    esp_err_t initEth(gpio_num_t mdc, gpio_num_t mdio, gpio_num_t phyEnable)
+    {
+#ifdef USE_ETH
+        esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
+        eth_netif = esp_netif_new(&cfg);
+        // Init common MAC and PHY configs to default
+        eth_mac_config_t mac_config = ETH_MAC_DEFAULT_CONFIG();
+        eth_phy_config_t phy_config = ETH_PHY_DEFAULT_CONFIG();
+        phy_config.phy_addr = 0;
+        phy_config.reset_gpio_num = phyEnable;
+        mac_config.smi_mdc_gpio_num = mdc;
+        mac_config.smi_mdio_gpio_num = mdio;
+        // Create new ESP32 Ethernet MAC instance
+        esp_eth_mac_t *emac = esp_eth_mac_new_esp32(&mac_config);
+        // Create new PHY instance based on board configuration
+        esp_eth_phy_t *phy = esp_eth_phy_new_lan87xx(&phy_config);
+        esp_eth_handle_t eth_handle = NULL;
+        esp_eth_config_t config = ETH_DEFAULT_CONFIG(emac, phy);
+        ESP_ERROR_CHECK(esp_eth_driver_install(&config, &eth_handle));
+        ESP_ERROR_CHECK(esp_netif_attach(eth_netif, esp_eth_new_netif_glue(eth_handle)));
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_ETH);
+        char buffer[32];
+        sprintf(buffer, CONFIG_NETWORK_HOSTNAME_PATTERN, mac[3], mac[4], mac[5]);
+        ESP_ERROR_CHECK(esp_netif_set_hostname(eth_netif, buffer));
+        ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
+        ESP_ERROR_CHECK(esp_eth_start(eth_handle));
+#endif
+        return ESP_OK;
+    }
+
+    esp_err_t InitAndRun(bool resetStoredWifiConnection, uint8_t *http_request_response_buffer, size_t http_request_response_buffer_len, NETWORK_MODE networkMode, gpio_num_t mdc, gpio_num_t mdio, gpio_num_t phyEnable)
+    {
+        http_buffer = http_request_response_buffer;
+        http_buffer_len = http_request_response_buffer_len;
+
+        if (wifi_manager_mutex != nullptr)
+        {
+            ESP_LOGE(TAG, "wifi manager already started");
+            return ESP_FAIL;
+        }
+
+        wifi_manager_mutex = xSemaphoreCreateMutex();
+
+        if (networkMode == NETWORK_MODE::WIFI_ONLY|| networkMode == NETWORK_MODE::WIFI_AND_ETH || networkMode == NETWORK_MODE::ETH_ONLY
+         )
+        {
+            ESP_ERROR_CHECK(esp_netif_init());
+            ESP_ERROR_CHECK(esp_event_loop_create_default());
+            ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, NULL));
+        }
+
+        if (networkMode == NETWORK_MODE::WIFI_ONLY || networkMode == NETWORK_MODE::WIFI_AND_ETH)
+        {
+            initWifi(resetStoredWifiConnection);
+        }
+        if (networkMode == NETWORK_MODE::ETH_ONLY || networkMode == NETWORK_MODE::WIFI_AND_ETH)
+        {
+            initEth(mdc, mdio, phyEnable);
+        }
+
+        // prepare simple network time protocol client and start it, when we got an IP-Adress (see event handler)
+        sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
+        sntp_setservername(0, "pool.ntp.org");
+        sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+        // Set timezone to Berlin
+        setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+        tzset();
+
+        return ESP_OK;
+    }
+
+    enum class SimpleState
+    {
         OFFLINE,
         AP_AVAILABLE,
         STA_CONNECTED,
     };
 
-    SimpleState GetState(){
-        if(staState==STA_STATE::CONNECTED) return SimpleState::STA_CONNECTED;
-        if(apAvailable) return SimpleState::AP_AVAILABLE;
+    SimpleState GetState()
+    {
+        if (staState == STA_STATE::CONNECTED)
+            return SimpleState::STA_CONNECTED;
+        if (apAvailable)
+            return SimpleState::AP_AVAILABLE;
         return SimpleState::OFFLINE;
     }
 

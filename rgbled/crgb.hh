@@ -97,6 +97,13 @@ struct CRGB
         return retval;
     }
 
+    static CRGB FromRGB565(uint16_t rgb565){
+        uint8_t r = (rgb565&0b1111100000000000)>>8;
+        uint8_t g = (rgb565&0b0000011111100000)>>3;
+        uint8_t b = (rgb565&0b0000000000011111)<<3;
+        return CRGB(r,g,b);
+    }
+
     static CRGB FromHSV(uint32_t h, uint32_t s, uint32_t v)
     {
         uint32_t r;
