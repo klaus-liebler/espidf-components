@@ -9,7 +9,6 @@
 extern const uint8_t x##_start[] asm("_binary_" #x "_start");\
 extern const uint8_t x##_end[] asm("_binary_" #x "_end");\
 extern const size_t  x##_size asm(#x"_length");
-
 constexpr uint64_t IO(int n){
     return (1ULL<<n);
 }

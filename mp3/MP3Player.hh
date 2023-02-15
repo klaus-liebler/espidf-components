@@ -9,17 +9,21 @@
 #include <freertos/task.h>
 #include <esp_system.h>
 #include <esp_log.h>
+#include <esp_timer.h>
 #include <driver/gpio.h>
+#if CONFIG_IDF_TARGET_ESP32
 #include <driver/dac.h>
-#include <driver/i2s.h>
+#endif
+// #include <driver/i2s.h>
+#include <driver/i2s_std.h>
 #define MINIMP3_ONLY_MP3
 #define MINIMP3_NO_SIMD
 #define MINIMP3_NONSTANDARD_BUT_LOGICAL
 #define MINIMP3_IMPLEMENTATION
 #include "minimp3.h"
 
-//https://voicemaker.in/
-//Neural TTS, German, Katja, 24000Hz, VoiceSpeed+20%
+// https://voicemaker.in/
+// Neural TTS, German, Katja, 24000Hz, VoiceSpeed+20%
 
 #define TAG "MP3"
 
@@ -34,21 +38,24 @@ namespace MP3
     enum class Output
     {
         UNINITIALIZED,
+#if CONFIG_IDF_TARGET_ESP32
         INTERNAL_DAC,
+#endif
         EXTERNAL_I2S_DAC,
     };
-    enum class PlayerMode{
+    enum class PlayerMode
+    {
         IDLE,
         MP3,
         VOLTAGE,
-        SYNTHESIZER,//for future use
+        SYNTHESIZER, // for future use
     };
 
     class Player
     {
     private:
         mp3dec_t *decoder;
-        i2s_port_t i2s_num;
+        i2s_chan_handle_t tx_handle{nullptr};
         int frameStart{0};
         int16_t *outBuffer;
         uint8_t *inBuffer{nullptr};
@@ -85,8 +92,8 @@ namespace MP3
                 ESP_LOGE(TAG, "MP3 player not initialized");
                 return ESP_FAIL;
             }
-            this->playerMode=PlayerMode::MP3;
-            i2s_zero_dma_buffer(i2s_num);
+            this->playerMode = PlayerMode::MP3;
+            //i2s_zero_dma_buffer(i2s_num); not available in IDF5.0
             this->file = file;
             this->fileLen = fileLen;
             // frameStart=0;
@@ -105,17 +112,23 @@ namespace MP3
 
         esp_err_t OutputConstantVoltage(const uint8_t value)
         {
+#if CONFIG_IDF_TARGET_ESP32
             if (output != Output::INTERNAL_DAC)
             {
                 ESP_LOGE(TAG, "MP3 player output not set to  Output::INTERNAL_DAC");
                 return ESP_FAIL;
             }
-            i2s_zero_dma_buffer(i2s_num);
-            i2s_set_sample_rates(i2s_num, 22050);
+            //i2s_zero_dma_buffer(i2s_num);
+            i2s_std_clk_config_t clk_cfg=I2S_STD_CLK_DEFAULT_CONFIG(22050);
+            i2s_channel_reconfig_std_clock(tx_handle, &clk_cfg);
             this->currentSampleRateHz = 22050;
-            this->playerMode=PlayerMode::VOLTAGE;
-            this->voltage=value<<8;
+            this->playerMode = PlayerMode::VOLTAGE;
+            this->voltage = value << 8;
             return ESP_OK;
+#else
+            ESP_LOGE(TAG, "Only possible with a SoC with integrated DAC");
+            return ESP_FAIL;
+#endif
         }
 
         esp_err_t Stop()
@@ -125,7 +138,7 @@ namespace MP3
                 ESP_LOGE(TAG, "MP3 player not initialized");
                 return ESP_FAIL;
             }
-            i2s_zero_dma_buffer(i2s_num);
+            //i2s_zero_dma_buffer(i2s_num);
             this->file = nullptr;
             this->fileLen = 0;
             this->frameStart = 0;
@@ -150,10 +163,12 @@ namespace MP3
                 s = INT16_MIN;
             else
                 s = v;
+#if CONFIG_IDF_TARGET_ESP32
             if (output == Output::INTERNAL_DAC)
             {
                 s += 0x8000;
             }
+#endif
         }
 
         esp_err_t Loop()
@@ -163,7 +178,7 @@ namespace MP3
                 ESP_LOGE(TAG, "MP3 player not initialized");
                 return ESP_FAIL;
             }
-            
+
             switch (playerMode)
             {
             case PlayerMode::MP3:
@@ -172,24 +187,25 @@ namespace MP3
             case PlayerMode::VOLTAGE:
                 return LoopVoltage();
             default:
-                 vTaskDelay(pdMS_TO_TICKS(50));
+                vTaskDelay(pdMS_TO_TICKS(50));
                 return ESP_OK;
             }
         }
 
-        esp_err_t LoopVoltage(){
+        esp_err_t LoopVoltage()
+        {
             for (int i = 0; i < 2 * MP3::SAMPLES_PER_FRAME; i++)
             {
                 outBuffer[i] = this->voltage;
             }
             size_t i2s_bytes_writen;
             int i2s_bytes_to_write{4 * MP3::SAMPLES_PER_FRAME};
-            i2s_write(i2s_num, outBuffer, i2s_bytes_to_write, &i2s_bytes_writen, portMAX_DELAY);
+            ESP_ERROR_CHECK(i2s_channel_write(tx_handle, outBuffer, i2s_bytes_to_write, &i2s_bytes_writen, portMAX_DELAY));
             return ESP_OK;
         }
-        
-        esp_err_t LoopMP3(){
 
+        esp_err_t LoopMP3()
+        {
 
             if (frameStart >= fileLen)
             {
@@ -198,8 +214,8 @@ namespace MP3
                 timeWrite = 0;
                 file = nullptr;
                 fileLen = 0;
-                this->playerMode=PlayerMode::IDLE;
-                i2s_zero_dma_buffer(i2s_num);
+                this->playerMode = PlayerMode::IDLE;
+                //i2s i2s_zero_dma_buffer(i2s_num);
                 return ESP_OK;
             }
             int bytesLeft = fileLen - frameStart;
@@ -219,9 +235,12 @@ namespace MP3
             if (this->currentSampleRateHz != info.hz)
             {
                 ESP_LOGI(TAG, "Change sample rate to %d Hz", info.hz);
-                if(i2s_set_sample_rates(i2s_num, info.hz)!=ESP_OK){
+                i2s_std_clk_config_t clk_cfg=I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)info.hz);
+                if (i2s_channel_reconfig_std_clock(tx_handle, &clk_cfg) != ESP_OK)
+                {
                     ESP_LOGI(TAG, "Changing sample rate to %d was not successful. Trying to set it to 22050Hz.", info.hz);
-                    i2s_set_sample_rates(i2s_num, 22050);
+                    i2s_std_clk_config_t clk_cfg=I2S_STD_CLK_DEFAULT_CONFIG(22050);
+                    i2s_channel_reconfig_std_clock(tx_handle, &clk_cfg);
                 }
                 this->currentSampleRateHz = info.hz;
             }
@@ -254,7 +273,7 @@ namespace MP3
             size_t i2s_bytes_writen;
             int i2s_bytes_to_write{samples * 4};
             now = esp_timer_get_time();
-            i2s_write(i2s_num, outBuffer, i2s_bytes_to_write, &i2s_bytes_writen, portMAX_DELAY);
+            ESP_ERROR_CHECK(i2s_channel_write(tx_handle, outBuffer, i2s_bytes_to_write, &i2s_bytes_writen, portMAX_DELAY));
             timeWrite += esp_timer_get_time() - now;
             if (i2s_bytes_to_write != i2s_bytes_writen)
             {
@@ -269,43 +288,69 @@ namespace MP3
             decoder = new mp3dec_t();
             SetGain(1.0);
         }
-
-        esp_err_t InitExternalI2SDAC(i2s_port_t i2s_num, gpio_num_t bck, gpio_num_t ws, gpio_num_t data)
+        esp_err_t InitExternalI2SDAC(gpio_num_t bck, gpio_num_t ws, gpio_num_t data)
         {
-            ESP_LOGI(TAG, "Initializing I2S_NUM %d for external DAC", i2s_num);
-            this->i2s_num = i2s_num;
-            this->output = Output::UNINITIALIZED;
-            mp3dec_init(decoder);
-            i2s_config_t i2s_config;
-            i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
-            i2s_config.sample_rate = 44100;
-            i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
-            i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT; // 2-channels
-#if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 5, 0)
-            i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
-            i2s_config.dma_desc_num = 8;
-            i2s_config.dma_frame_num = 64; // MP3::SAMPLES_PER_FRAME/2; //Max 1024
-#else
-            i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
-            i2s_config.dma_buf_count = 4,
-            i2s_config.dma_buf_len = 128,
-#endif
-            i2s_config.intr_alloc_flags = 0; // Default interrupt priority
-            i2s_config.use_apll = false;
-            i2s_config.fixed_mclk = 0;
-            i2s_config.tx_desc_auto_clear = false; // Auto clear tx descriptor on underflow
+            ESP_LOGI(TAG, "Initializing I2S for external DAC");
+            i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
+            chan_cfg.auto_clear = true; // Auto clear the legacy data in the DMA buffer
+            ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_handle, nullptr));
+            i2s_std_config_t std_cfg = {
+                .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(44100),
+                .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
+                .gpio_cfg = {
+                    .mclk = GPIO_NUM_NC,
+                    .bclk = bck,
+                    .ws = ws,
+                    .dout = data,
+                    .din = GPIO_NUM_NC,
+                    .invert_flags = {
+                        .mclk_inv = false,
+                        .bclk_inv = false,
+                        .ws_inv = false,
+                    },
+                },
+            };
 
-            ESP_ERROR_CHECK(i2s_driver_install(i2s_num, &i2s_config, 0, NULL));
-            i2s_pin_config_t pin_config;
-            pin_config.bck_io_num = (int)bck;
-            pin_config.ws_io_num = (int)ws;
-            pin_config.data_out_num = (int)data;
-            pin_config.data_in_num = -1; // Not used
-            ESP_ERROR_CHECK(i2s_set_pin(i2s_num, &pin_config));
-            this->output = Output::EXTERNAL_I2S_DAC;
+            ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_handle, &std_cfg));
+            ESP_ERROR_CHECK(i2s_channel_enable(tx_handle));
+
+            /*
+
+                        this->i2s_num = i2s_num;
+                        this->output = Output::UNINITIALIZED;
+                        mp3dec_init(decoder);
+                        i2s_config_t i2s_config;
+                        i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX);
+                        i2s_config.sample_rate = 44100;
+                        i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
+                        i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT; // 2-channels
+            #if ESP_IDF_VERSION >= ESP_IDF_VERSION_VAL(4, 5, 0)
+                        i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
+                        i2s_config.dma_desc_num = 8;
+                        i2s_config.dma_frame_num = 64; // MP3::SAMPLES_PER_FRAME/2; //Max 1024
+            #else
+                        i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
+                        i2s_config.dma_buf_count = 4,
+                        i2s_config.dma_buf_len = 128,
+            #endif
+                        i2s_config.intr_alloc_flags = 0; // Default interrupt priority
+                        i2s_config.use_apll = false;
+                        i2s_config.fixed_mclk = 0;
+                        i2s_config.tx_desc_auto_clear = false; // Auto clear tx descriptor on underflow
+
+                        ESP_ERROR_CHECK(i2s_driver_install(i2s_num, &i2s_config, 0, NULL));
+                        i2s_pin_config_t pin_config;
+                        pin_config.bck_io_num = (int)bck;
+                        pin_config.ws_io_num = (int)ws;
+                        pin_config.data_out_num = (int)data;
+                        pin_config.data_in_num = -1; // Not used
+                        ESP_ERROR_CHECK(i2s_set_pin(i2s_num, &pin_config));
+                        this->output = Output::EXTERNAL_I2S_DAC;
+            */
             return ESP_OK;
         }
 
+#if CONFIG_IDF_TARGET_ESP32
         esp_err_t InitInternalDACMonoRightPin25()
         {
             ESP_LOGI(TAG, "Initializing I2S_NUM_0 for internal DAC");
@@ -338,6 +383,7 @@ namespace MP3
             this->output = Output::INTERNAL_DAC;
             return ESP_OK;
         }
+#endif
     };
 
 }

@@ -1,10 +1,10 @@
 #pragma once
-#include <i2c.hh>
-#include <esp_log.h>
+#include <sensact_logger.hh>
 #include <inttypes.h>
 #include "tas5805m_reg_cfg.h"
+#include "errorcodes.hh"
 
-#define TAS5806M_TAG "tas580x"
+#define TAG "tas580x"
 
 namespace TAS580x
 {
@@ -234,16 +234,16 @@ namespace TAS580x
 	class M
 	{
 	private:
-		i2c_port_t i2c_port;
+		sensact::hal::iI2CBus* i2c_port;
 		TAS580x::ADDR7bit addr;
 		gpio_num_t power_down;
 		bool muted{false};
 		
 
-		esp_err_t tas5805m_transmit_registers(const tas5805m_cfg_reg_t *conf_buf, int size)
+		ErrorCode tas5805m_transmit_registers(const tas5805m_cfg_reg_t *conf_buf, int size)
 		{
 			int i = 0;
-			esp_err_t ret = ESP_OK;
+			ErrorCode ret = ErrorCode::OK;
 			while (i < size)
 			{
 				switch (conf_buf[i].offset)
@@ -255,43 +255,43 @@ namespace TAS580x
 					vTaskDelay(pdMS_TO_TICKS(conf_buf[i].value));
 					break;
 				case CFG_META_BURST:
-					ret = I2C::WriteReg(i2c_port, (uint8_t)this->addr, conf_buf[i + 1].offset, (unsigned char *)(&conf_buf[i + 1].value), conf_buf[i].value);
+					ret = i2c_port->WriteReg((uint8_t)this->addr, conf_buf[i + 1].offset, (unsigned char *)(&conf_buf[i + 1].value), conf_buf[i].value);
 					i += (conf_buf[i].value / 2) + 1;
 					break;
 				case CFG_END_1:
 					if (CFG_END_2 == conf_buf[i + 1].offset && CFG_END_3 == conf_buf[i + 2].offset)
 					{
-						ESP_LOGI(TAS5806M_TAG, "End of tms5805m reg: %d\n", i);
+						LOGI(TAG, "End of tms5805m reg: %d\n", i);
 					}
 					break;
 				default:
-					ret = I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, conf_buf[i].offset, conf_buf[i].value);
+					ret = i2c_port->WriteSingleReg((uint8_t)this->addr, conf_buf[i].offset, conf_buf[i].value);
 					break;
 				}
 				i++;
 			}
-			if (ret != ESP_OK)
+			if (ret != ErrorCode::OK)
 			{
-				ESP_LOGE(TAS5806M_TAG, "Fail to load configuration to tas5805m");
-				return ESP_FAIL;
+				LOGE(TAG, "Fail to load configuration to tas5805m");
+				return ret;
 			}
-			ESP_LOGI(TAS5806M_TAG, "%s:  write %d reg done", __FUNCTION__, i);
+			LOGI(TAG, "%s:  write %d reg done", __FUNCTION__, i);
 			return ret;
 		}
 
 	public:
-		M(i2c_port_t i2c_port, TAS580x::ADDR7bit addr, gpio_num_t power_down) : i2c_port(i2c_port), addr(addr), power_down(power_down)
+		M(sensact::hal::iI2CBus* i2c_port, TAS580x::ADDR7bit addr, gpio_num_t power_down) : i2c_port(i2c_port), addr(addr), power_down(power_down)
 		{
 		}
 		//0b00000=0dB, 0b11111=-15,5dB
-		esp_err_t SetAnalogGain(uint8_t gain_0to31)
+		ErrorCode SetAnalogGain(uint8_t gain_0to31)
 		{
-			return I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::AGAIN, gain_0to31);
+			return i2c_port->WriteSingleReg((uint8_t)this->addr, R::AGAIN, gain_0to31);
 		}
 		//0=MAX Volume, 254=MIN Volume, 255=Mute
-		esp_err_t SetDigitalVolume(uint8_t volume = 0b00110000)
+		ErrorCode SetDigitalVolume(uint8_t volume = 0b00110000)
 		{
-			return I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DIG_VOL_CTRL, volume);
+			return i2c_port->WriteSingleReg((uint8_t)this->addr, R::DIG_VOL_CTRL, volume);
 		}
 
 		static inline int get_volume_index(int vol)
@@ -309,7 +309,7 @@ namespace TAS580x
 			return index;
 		}
 
-		esp_err_t SetVolume(int vol)
+		ErrorCode SetVolume(int vol)
 		{
 			int vol_idx = 0;
 
@@ -321,15 +321,15 @@ namespace TAS580x
 			}
 			vol_idx = vol / 5;
 
-			esp_err_t ret = ESP_OK;
+			ErrorCode ret = ErrorCode::OK;
 
 
-			ret = I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DIG_VOL_CTRL, tas5805m_volume[vol_idx]);
-			ESP_LOGI(TAS5806M_TAG, "volume = 0x%x", tas5805m_volume[vol_idx]);
+			ret = i2c_port->WriteSingleReg((uint8_t)this->addr, R::DIG_VOL_CTRL, tas5805m_volume[vol_idx]);
+			LOGI(TAG, "volume = 0x%x", (unsigned int)tas5805m_volume[vol_idx]);
 			return ret;
 		}
 
-		esp_err_t SetVolumeOld(int vol)
+		ErrorCode SetVolumeOld(int vol)
 		{
 			unsigned int index;
 			uint32_t volume_hex;
@@ -347,27 +347,27 @@ namespace TAS580x
 			byte1 = ((volume_hex >> 0) & 0xFF);
 
 			//w 58 00 00
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0);
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0));
 			//w 58 7f 8c
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_BOOK, 0x8c);
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg( (uint8_t)this->addr, R::SELECT_BOOK, 0x8c));
 			//w 58 00 2a
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0x2A);
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0x2A));
 			//w 58 24 xx xx xx xx
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x24, byte4);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x25, byte3);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x26, byte2);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x27, byte1);
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, 0x24, byte4));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, 0x25, byte3));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, 0x26, byte2));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, 0x27, byte1));
 			//w 58 28 xx xx xx xx
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x28, byte4);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x29, byte3);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x2a, byte2);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, 0x2b, byte1);
-			return ESP_OK;
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, 0x28, byte4));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, 0x29, byte3));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, 0x2a, byte2));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, 0x2b, byte1));
+			return ErrorCode::OK;
 		}
 
-		esp_err_t Mute(bool mute)
+		ErrorCode Mute(bool mute)
 		{
-			if(mute==muted) return ESP_OK;
+			if(mute==muted) return ErrorCode::OK;
 			uint8_t DEVICE_CTRL_2_value = 0;
 			uint8_t SAP_CTRL3_value = 0;
 
@@ -385,26 +385,26 @@ namespace TAS580x
 				SAP_CTRL3_value = 0x11;
 				muted=false;
 			}
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_BOOK, 0x00);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SELECT_PAGE, 0);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, DEVICE_CTRL_2_value);
-			I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::SAP_CTRL3, SAP_CTRL3_value);
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SELECT_BOOK, 0x00));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, DEVICE_CTRL_2_value));
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SAP_CTRL3, SAP_CTRL3_value));
 
-			return ESP_OK;
+			return ErrorCode::OK;
 		}
 
-		esp_err_t PowerUp(){
-			return gpio_set_level(power_down, 1);
+		void PowerUp(){
+			gpio_set_level(power_down, 1);
 		}
 
-		esp_err_t PowerDown(){
-			return gpio_set_level(power_down, 0);
+		void PowerDown(){
+			gpio_set_level(power_down, 0);
 		}
 
-		esp_err_t Init(uint8_t initialVolume_0_158)
+		ErrorCode Init(uint8_t initialVolume_0_158)
 		{
-			esp_err_t ret = ESP_OK;
+			ErrorCode ret = ErrorCode::OK;
 			/* Register the PDN pin as output and write 1 to enable the TAS chip */
 			gpio_set_level(power_down, 1);
 			gpio_reset_pin(power_down);
@@ -412,29 +412,29 @@ namespace TAS580x
 			gpio_set_pull_mode(power_down, GPIO_FLOATING);
 
 			/* sound is ready */
-			ESP_LOGI(TAS5806M_TAG, "setup of the audio amp begins");
+			LOGI(TAG, "setup of the audio amp begins");
 			vTaskDelay(pdMS_TO_TICKS(200));
 
 			/* set PDN to 1 */
 			gpio_set_level(power_down, 1);
 			vTaskDelay(pdMS_TO_TICKS(100));
 
-			ESP_LOGI(TAS5806M_TAG, "Setting to HI Z");
-			ESP_ERROR_CHECK(I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x02));
+			LOGI(TAG, "Setting to HI Z");
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x02));
 			vTaskDelay(pdMS_TO_TICKS(100));
 
 
-			ESP_LOGI(TAS5806M_TAG, "Setting to PLAY");
-			ESP_ERROR_CHECK(I2C::WriteSingleReg(i2c_port, (uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x03));
+			LOGI(TAG, "Setting to PLAY");
+			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x03));
 
 			vTaskDelay(pdMS_TO_TICKS(100));
 
 			uint8_t h70h71h72[3];
-			ESP_ERROR_CHECK(I2C::ReadReg(i2c_port, (uint8_t)this->addr, R::CHAN_FAULT, h70h71h72, 3));
+			RETURN_ON_ERRORCODE(i2c_port->ReadReg((uint8_t)this->addr, R::CHAN_FAULT, h70h71h72, 3));
 
-			ESP_LOGI(TAS5806M_TAG, "0x70 Register: %d", h70h71h72[0]);
-			ESP_LOGI(TAS5806M_TAG, "0x71 Register: %d", h70h71h72[1]);
-			ESP_LOGI(TAS5806M_TAG, "0x72 Register: %d", h70h71h72[2]);
+			LOGI(TAG, "0x70 Register: %d", h70h71h72[0]);
+			LOGI(TAG, "0x71 Register: %d", h70h71h72[1]);
+			LOGI(TAG, "0x72 Register: %d", h70h71h72[2]);
 
 			SetVolume(initialVolume_0_158);
 			return ret;

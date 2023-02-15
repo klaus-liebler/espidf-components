@@ -15,6 +15,7 @@
 #include <esp_eth_phy.h>
 #include <esp_eth_netif_glue.h>
 #endif
+#include <esp_mac.h>
 #include <esp_wifi.h>
 
 #include <esp_event.h>
@@ -28,7 +29,7 @@
 #include <lwip/ip4_addr.h>
 #include <driver/gpio.h>
 #include <nvs.h>
-#include <esp_spi_flash.h>
+#include <spi_flash_mmap.h>
 #include <esp_sntp.h>
 #include <time.h>
 
@@ -681,6 +682,8 @@ namespace WIFIMGR
 #endif
         return ESP_OK;
     }
+
+    
 
     esp_err_t InitAndRun(bool resetStoredWifiConnection, uint8_t *http_request_response_buffer, size_t http_request_response_buffer_len, NETWORK_MODE networkMode, gpio_num_t mdc, gpio_num_t mdio, gpio_num_t phyEnable)
     {

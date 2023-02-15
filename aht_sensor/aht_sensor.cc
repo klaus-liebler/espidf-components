@@ -45,7 +45,7 @@ namespace AHT
         I2C::Read(this->i2c_num, (uint8_t)this->address_7bit, temp, 6);
         this->humid = ((temp[1] << 16) | (temp[2] << 8) | temp[3]) >> 4;
         this->temp = ((temp[3] & 0x0F) << 16) | (temp[4] << 8) | temp[5];
-        ESP_LOGD(TAG, "Readout H=%d T=%d", this->humid, this->temp);
+        ESP_LOGD(TAG, "Readout H=%lu T=%lu", this->humid, this->temp);
         return ESP_OK;
     }
     esp_err_t M::Trigger(int64_t &waitTillReadout)
