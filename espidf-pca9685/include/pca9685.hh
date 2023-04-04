@@ -2,6 +2,9 @@
 #include <stdint.h>
 #include <driver/i2c.h>
 #include <errorcodes.hh>
+#include <array>
+#include <common.hh>
+
 
 namespace PCA9685
 {
@@ -32,7 +35,8 @@ namespace PCA9685
   constexpr uint8_t ALL_LED_OFF_H = 0xFD;
   constexpr uint8_t PRE_SCALE = 0xFE;
   constexpr uint16_t MAX_OUTPUT_VALUE = 0x1000;
-
+  constexpr uint16_t FULL_ON = 0x1000;
+  constexpr uint16_t FULL_OFF = 0x1000;
   constexpr uint8_t SWRST = 0b00000110;
 	constexpr uint8_t ALL_CALL =0b11100000;
 
@@ -150,23 +154,35 @@ namespace PCA9685
   class M
   {
   public:                                                                                                                  
-    M(i2c_port_t i2c_num, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
+    M(iI2CPort* i2cPort, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
     ErrorCode Setup();
-	  static ErrorCode SoftwareReset(i2c_port_t i2c_num);
+	  static ErrorCode SoftwareReset(iI2CPort* i2cPort);
 	  ErrorCode SetOutput(Output Output, uint16_t OnValue, uint16_t OffValue);
-	  static ErrorCode SetupStatic(i2c_port_t i2c_num, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
-	  static ErrorCode SetOutputs(i2c_port_t i2c_num, Device device, uint16_t mask, uint16_t dutyCycle);
-	  static ErrorCode SetAllOutputs(i2c_port_t i2c_num, Device device, uint16_t dutyCycle);
+	  static ErrorCode SetupStatic(iI2CPort* i2cPort, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
+	  static ErrorCode SetOutputs(iI2CPort* i2cPort, Device device, uint16_t mask, uint16_t dutyCycle);
+	  static ErrorCode SetAllOutputs(iI2CPort* i2cPort, Device device, uint16_t dutyCycle);
 	  ErrorCode SetOutputFull(Output Output, bool on);
 	  ErrorCode SetAll(uint16_t OnValue, uint16_t OffValue);
 	  ErrorCode SetDutyCycleForOutput(Output Output, uint16_t val);
+    ErrorCode SetOutput(uint16_t output, uint16_t value, bool loopWriteImmediately=false){
+			val[output & 0x0F] = value;
+      if(!loopWriteImmediately){
+        return ErrorCode::OK;
+      }
+      return Loop();
+    }
+    ErrorCode Loop();
+
   private:
-  	int i2c_port;
+  	iI2CPort* i2cPort;
 	  Device device;
 	  InvOutputs inv;
 	  OutputDriver outdrv;
 	  OutputNotEn outne;
 	  Frequency freq;
+    std::array<uint16_t, 16> val;
+    std::array<uint16_t, 16> written;
+    
     static uint8_t LEDn_ON_L(uint8_t n) {return (uint8_t)(0x06 + (n)*4);}
     static uint8_t LEDn_ON_H(uint8_t n) {return (uint8_t)(0x07 + (n)*4);}
     static uint8_t LEDn_OFF_L(uint8_t n){return (uint8_t)(0x08 + (n)*4);}

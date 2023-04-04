@@ -1,11 +1,12 @@
 #pragma once
 #include <stdint.h>
 #include <driver/i2c.h>
+#include <i2c.hh>
 #include <errorcodes.hh>
 
 namespace PCA9555
 {
-  static const uint8_t DEVICE_ADDRESS_BASE = 0x40;
+  constexpr uint8_t DEVICE_ADDRESS_BASE = 0x20;
 
   enum class Register : uint8_t
   {
@@ -34,16 +35,19 @@ namespace PCA9555
   class M
   {
   private:
-    i2c_port_t i2c_num;
+    iI2CPort* i2cPort;
     Device device;
-    uint16_t cache;
-    uint16_t initialValue;
-
+    uint16_t cachedInput;
+    uint16_t configurationRegister;
+    uint16_t polarityInversionRegister;
   public:
-    M(i2c_port_t i2c_num, Device device, uint16_t initialValue);
+    M(iI2CPort* i2cPort, Device device, uint16_t initialInputValue=0, uint16_t configurationRegister=0xFFFF, uint16_t polarityInversionRegister=0x0000);
     ErrorCode Setup();
     uint16_t GetCachedInput(void);
     ErrorCode Update(void);
+    ErrorCode SetOutput(uint16_t output);
+    ErrorCode SetInputOutputConfig(uint16_t config);
+    ErrorCode SetInversionConfig(uint16_t config);
   };
 
 }

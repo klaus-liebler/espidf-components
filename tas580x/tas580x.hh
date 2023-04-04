@@ -1,8 +1,9 @@
 #pragma once
-#include <sensact_logger.hh>
 #include <inttypes.h>
 #include "tas5805m_reg_cfg.h"
 #include "errorcodes.hh"
+#include "common.hh"
+#include <esp_log.h>
 
 #define TAG "tas580x"
 
@@ -234,7 +235,7 @@ namespace TAS580x
 	class M
 	{
 	private:
-		sensact::hal::iI2CBus* i2c_port;
+		iI2CPort* i2c_port;
 		TAS580x::ADDR7bit addr;
 		gpio_num_t power_down;
 		bool muted{false};
@@ -261,7 +262,7 @@ namespace TAS580x
 				case CFG_END_1:
 					if (CFG_END_2 == conf_buf[i + 1].offset && CFG_END_3 == conf_buf[i + 2].offset)
 					{
-						LOGI(TAG, "End of tms5805m reg: %d\n", i);
+						ESP_LOGI(TAG, "End of tms5805m reg: %d\n", i);
 					}
 					break;
 				default:
@@ -272,15 +273,15 @@ namespace TAS580x
 			}
 			if (ret != ErrorCode::OK)
 			{
-				LOGE(TAG, "Fail to load configuration to tas5805m");
+				ESP_LOGE(TAG, "Fail to load configuration to tas5805m");
 				return ret;
 			}
-			LOGI(TAG, "%s:  write %d reg done", __FUNCTION__, i);
+			ESP_LOGI(TAG, "%s:  write %d reg done", __FUNCTION__, i);
 			return ret;
 		}
 
 	public:
-		M(sensact::hal::iI2CBus* i2c_port, TAS580x::ADDR7bit addr, gpio_num_t power_down) : i2c_port(i2c_port), addr(addr), power_down(power_down)
+		M(iI2CPort* i2c_port, TAS580x::ADDR7bit addr, gpio_num_t power_down) : i2c_port(i2c_port), addr(addr), power_down(power_down)
 		{
 		}
 		//0b00000=0dB, 0b11111=-15,5dB
@@ -325,7 +326,7 @@ namespace TAS580x
 
 
 			ret = i2c_port->WriteSingleReg((uint8_t)this->addr, R::DIG_VOL_CTRL, tas5805m_volume[vol_idx]);
-			LOGI(TAG, "volume = 0x%x", (unsigned int)tas5805m_volume[vol_idx]);
+			ESP_LOGI(TAG, "volume = 0x%x", (unsigned int)tas5805m_volume[vol_idx]);
 			return ret;
 		}
 
@@ -404,6 +405,7 @@ namespace TAS580x
 
 		ErrorCode Init(uint8_t initialVolume_0_158)
 		{
+			ESP_LOGI(TAG, "setup of the audio amp begins");
 			ErrorCode ret = ErrorCode::OK;
 			/* Register the PDN pin as output and write 1 to enable the TAS chip */
 			gpio_set_level(power_down, 1);
@@ -412,19 +414,18 @@ namespace TAS580x
 			gpio_set_pull_mode(power_down, GPIO_FLOATING);
 
 			/* sound is ready */
-			LOGI(TAG, "setup of the audio amp begins");
 			vTaskDelay(pdMS_TO_TICKS(200));
 
 			/* set PDN to 1 */
 			gpio_set_level(power_down, 1);
 			vTaskDelay(pdMS_TO_TICKS(100));
 
-			LOGI(TAG, "Setting to HI Z");
+			ESP_LOGI(TAG, "Setting to HI Z");
 			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x02));
 			vTaskDelay(pdMS_TO_TICKS(100));
 
 
-			LOGI(TAG, "Setting to PLAY");
+			ESP_LOGI(TAG, "Setting to PLAY");
 			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, (uint8_t)0x03));
 
 			vTaskDelay(pdMS_TO_TICKS(100));
@@ -432,11 +433,11 @@ namespace TAS580x
 			uint8_t h70h71h72[3];
 			RETURN_ON_ERRORCODE(i2c_port->ReadReg((uint8_t)this->addr, R::CHAN_FAULT, h70h71h72, 3));
 
-			LOGI(TAG, "0x70 Register: %d", h70h71h72[0]);
-			LOGI(TAG, "0x71 Register: %d", h70h71h72[1]);
-			LOGI(TAG, "0x72 Register: %d", h70h71h72[2]);
+			ESP_LOGI(TAG, "0x70 Register: %d", h70h71h72[0]);
+			ESP_LOGI(TAG, "0x71 Register: %d", h70h71h72[1]);
+			ESP_LOGI(TAG, "0x72 Register: %d", h70h71h72[2]);
 
-			SetVolume(initialVolume_0_158);
+			RETURN_ON_ERRORCODE(SetVolume(initialVolume_0_158));
 			return ret;
 		}
 	};

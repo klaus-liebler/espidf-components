@@ -111,6 +111,17 @@ namespace RGBLED
             return ESP_OK;
         }
 
+        esp_err_t GetPixel(size_t index, CRGB* color)
+        {
+            if (index >= LEDSIZE)
+                return ESP_FAIL;
+            uint32_t start = index * 3; //GRB  
+            color->g=this->table[start+0];
+            color->r=this->table[start+1];
+            color->b=this->table[start+2];
+            return ESP_OK;
+        }
+
 
 
         esp_err_t Refresh(uint32_t timeout_ms = 1000, bool forceRefreshEvenIfNotNecessary = false)

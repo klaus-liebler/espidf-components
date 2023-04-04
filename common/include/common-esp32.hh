@@ -15,6 +15,10 @@ namespace esp32{
         vTaskDelay(ms2ticks(ms));
     }
 
+    void delayMs(int64_t ms){
+        vTaskDelay(pdMS_TO_TICKS(ms));
+    }
+
 
     esp_err_t ConfigGpioInput(gpio_num_t gpio, gpio_pull_mode_t pullMode){
         gpio_config_t io_conf = {};

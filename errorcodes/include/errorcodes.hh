@@ -5,8 +5,7 @@
 
 enum class ErrorCode:int
 {
-    OK = 0,
-    
+    OK = 0,  
     GENERIC_ERROR = 1,
     QUEUE_OVERLOAD = 2,
     NONE_AVAILABLE=3,

@@ -1,33 +1,45 @@
 #include <inttypes.h>
 #include <i2c.hh>
-#include "pca9555.hh"
 #include <esp_log.h>
 #include <string.h>
+#include <common.hh>
+#include <errorcodes.hh>
+#include "pca9555.hh"
 #define TAG "PCA9555"
 
 namespace PCA9555
 {
-    M::M(i2c_port_t i2c_num, Device device, uint16_t initialValue):i2c_num(i2c_num), device(device), initialValue(initialValue){}
-    ErrorCode M::Setup(){
-		esp_err_t err = I2C::IsAvailable(i2c_num, (uint8_t)device);
-		if(err != ESP_OK)
-		{
-			return ErrorCode::DEVICE_NOT_RESPONDING;
+    M::M(iI2CPort* i2cPort, Device device, uint16_t initialInputValue,uint16_t configurationRegister, uint16_t polarityInversionRegister):
+		i2cPort(i2cPort), device(device), cachedInput(initialInputValue),configurationRegister(configurationRegister),polarityInversionRegister(polarityInversionRegister) {
+
 		}
-		
+    ErrorCode M::Setup(){
+		RETURN_ON_ERRORCODE(i2cPort->IsAvailable((uint8_t)device));
+    	RETURN_ON_ERRORCODE(i2cPort->WriteReg((uint8_t)device, (uint16_t)Register::ConfigurationPort0, (uint8_t*)&this->configurationRegister, 2));
+		RETURN_ON_ERRORCODE(i2cPort->WriteReg((uint8_t)device, (uint16_t)Register::PolarityInversionPort0, (uint8_t*)&this->polarityInversionRegister, 2));
 		return Update();
 	}
     uint16_t M::GetCachedInput(void){
-		return this->cache;
+		return this->cachedInput;
 	}
     ErrorCode M::Update(void){
 		volatile uint16_t ret=0xFFFF;
-		esp_err_t err = I2C::ReadReg(i2c_num, (uint8_t)device, (uint16_t)Register::InputPort0, (uint8_t*)&ret, 2);
-		if(err!=ESP_OK){
-			return ErrorCode::GENERIC_ERROR;
-		}
-		this->cache=ret;
+		RETURN_ON_ERRORCODE(i2cPort->ReadReg((uint8_t)device, (uint16_t)Register::InputPort0, (uint8_t*)&ret, 2));
+		this->cachedInput=ret;
 		return ErrorCode::OK;
 	}
-  
+
+	ErrorCode M::SetOutput(uint16_t output){
+		RETURN_ON_ERRORCODE(i2cPort->WriteReg((uint8_t)device, (uint16_t)Register::OutputPort0, (uint8_t*)&output, 2));
+		return ErrorCode::OK;
+	}
+
+	ErrorCode M::SetInputOutputConfig(uint16_t config){
+		RETURN_ON_ERRORCODE(i2cPort->WriteReg((uint8_t)device, (uint16_t)Register::ConfigurationPort0, (uint8_t*)&config, 2));
+		return ErrorCode::OK;
+	}
+    ErrorCode M::SetInversionConfig(uint16_t config){
+		RETURN_ON_ERRORCODE(i2cPort->WriteReg((uint8_t)device, (uint16_t)Register::PolarityInversionPort0, (uint8_t*)&config, 2));
+		return ErrorCode::OK;
+	}
 }

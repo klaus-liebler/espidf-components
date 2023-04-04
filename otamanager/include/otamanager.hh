@@ -3,7 +3,7 @@
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_system.h>
-#include <esp_spi_flash.h>
+#include <spi_flash_mmap.h>
 #include <esp_wifi.h>
 #include <esp_event.h>
 #include <esp_log.h>
@@ -86,11 +86,11 @@ namespace otamanager
 
             if (configured_partition != running_partition)
             {
-                ESP_LOGW(TAG, "Configured OTA boot partition at offset 0x%08x, but running from offset 0x%08x. (This can happen if either the OTA boot data or preferred boot image become corrupted somehow.)", configured_partition->address, running_partition->address);
+                ESP_LOGW(TAG, "Configured OTA boot partition at offset 0x%08x, but running from offset 0x%08x. (This can happen if either the OTA boot data or preferred boot image become corrupted somehow.)", (unsigned int)configured_partition->address, (unsigned int)running_partition->address);
             }
 
             esp_ota_get_partition_description(running_partition, &app_desc_run);
-            ESP_LOGI(TAG, "Running partition type %d subtype %d (offset 0x%08x) having firmware version: %s", running_partition->type, running_partition->subtype, running_partition->address, app_desc_run.version);
+            ESP_LOGI(TAG, "Running partition type %d subtype %d (offset 0x%08x) having firmware version: %s", running_partition->type, running_partition->subtype, (unsigned int)running_partition->address, app_desc_run.version);
             
             
             if (esp_ota_get_partition_description(last_invalid_partition, &app_desc_invalid) == ESP_OK)
@@ -150,7 +150,7 @@ namespace otamanager
                 // check current ota version with last invalid partition
                 if (last_invalid_partition != NULL && memcmp(app_desc_invalid.version, app_desc_ota.version, sizeof(app_desc_ota.version)) == 0)
                 {
-                    ESP_LOGI(TAG, "New version is the same as invalid version. We will not continue the update and check again in %d min.", AUTO_CHECK_INTERVAL_MINUTES);
+                    ESP_LOGI(TAG, "New version is the same as invalid version. We will not continue the update and check again in %ld min.", AUTO_CHECK_INTERVAL_MINUTES);
                     esp_https_ota_abort(https_ota_handle);
                     myself->request=UpdateRequest::NO_REQUEST_PENDING;
                     myself->lastUpdateCheckUs=esp_timer_get_time();
@@ -158,7 +158,7 @@ namespace otamanager
                 }
 
                 if (memcmp(app_desc_ota.version, app_desc_run.version, sizeof(app_desc_ota.version)) == 0) {
-                    ESP_LOGI(TAG, "New version ist the same as currently running version. We will not continue the update and check again in %d min.", AUTO_CHECK_INTERVAL_MINUTES);
+                    ESP_LOGI(TAG, "New version ist the same as currently running version. We will not continue the update and check again in %ld min.", AUTO_CHECK_INTERVAL_MINUTES);
                     esp_https_ota_abort(https_ota_handle);
                     myself->request=UpdateRequest::NO_REQUEST_PENDING;
                     myself->lastUpdateCheckUs=esp_timer_get_time();
@@ -166,7 +166,7 @@ namespace otamanager
                 }
                 myself->state=State::UPDATING;
                 int image_size = esp_https_ota_get_image_size(https_ota_handle);
-                ESP_LOGI(TAG, "There is a new version %s available for firmware \"%s\" compiled on %s. We try to write this to partition subtype %d at offset 0x%x", app_desc_ota.version, app_desc_ota.project_name, app_desc_ota.date, update_partition->subtype, update_partition->address);
+                ESP_LOGI(TAG, "There is a new version %s available for firmware \"%s\" compiled on %s. We try to write this to partition subtype %d at offset 0x%x", app_desc_ota.version, app_desc_ota.project_name, app_desc_ota.date, update_partition->subtype, (unsigned int)update_partition->address);
     
                 esp_err_t err{ESP_ERR_HTTPS_OTA_IN_PROGRESS};
                 while (err == ESP_ERR_HTTPS_OTA_IN_PROGRESS) 
