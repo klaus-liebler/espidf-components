@@ -13,6 +13,7 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 #include <driver/i2s_std.h>
+#include <codec_manager.hh>
 
 #define MINIMP3_ONLY_MP3
 #define MINIMP3_NO_SIMD
@@ -49,15 +50,17 @@ namespace AudioPlayer
         const uint8_t *file;
         size_t fileLen;
         uint32_t sampleRate;//0 means "auto detect"
+        uint8_t volume;
         bool cancelPrevious; //false means: play current AudioOrder to its end
     };
 
-    constexpr AudioOrder SILENCE_ORDER{AudioType::SILENCE, nullptr, 0, 0, true};
+    constexpr AudioOrder SILENCE_ORDER{AudioType::SILENCE, nullptr, 0, 0, 0, true};
 
     class Player
     {
     private:
         QueueHandle_t orderQueue{nullptr};
+        CodecManager::M* codecManager{nullptr};
         mp3dec_t *decoder;
         i2s_chan_handle_t tx_handle{nullptr};
         int32_t frameStart{0};
@@ -65,7 +68,7 @@ namespace AudioPlayer
 
         AudioOrder currentOrder;
 
-        uint8_t gainF2P6{0};
+        uint8_t gainF2P6{1<<6};
         int32_t currentSampleRateHz{0};
         bool usesInternalDac{false};
 
@@ -138,6 +141,7 @@ namespace AudioPlayer
             {
                 for (int i = samples - 1; i >= 0; i--)
                 {
+                    //TODO not yet optimized
                     int16_t l = outBuffer[i];
                     int16_t r = outBuffer[i];
                     AmplifyAndClampAndNormalizeForDAC(l);
@@ -148,14 +152,19 @@ namespace AudioPlayer
             }
             else if (info.channels == 2 && usesInternalDac)
             {
-                for (size_t i = 0; i < samples * 2; i += 2)
+                for (size_t i = 0; i < samples * 2; i++)
                 {
-                    int16_t l = outBuffer[i];
-                    int16_t r = outBuffer[i + 1];
-                    AmplifyAndClampAndNormalizeForDAC(l);
-                    AmplifyAndClampAndNormalizeForDAC(r);
-                    outBuffer[i] = l;
-                    outBuffer[i + 1] = r;
+                    int32_t v = (outBuffer[i] * gainF2P6) >> 6;
+                    outBuffer[i]=clip(v, INT16_MIN, INT16_MAX);
+                    outBuffer[i] += 0x8000;
+                }
+            }
+            else if (info.channels == 2 && !usesInternalDac && codecManager==nullptr)
+            {
+                for (size_t i = 0; i < samples * 2; i++)
+                {
+                    int32_t v = (outBuffer[i] * gainF2P6) >> 6;
+                    outBuffer[i]=clip(v, INT16_MIN, INT16_MAX);
                 }
             }
             
@@ -179,6 +188,7 @@ namespace AudioPlayer
                 return ESP_FAIL;
             }
             mp3dec_init(decoder);
+            if(codecManager) codecManager->SetPowerState(true);
             ESP_LOGI(TAG, "Successfully initialized a new MP3 sound play task. File=%p; FileLen=%zu; FrameStart=%ld;", currentOrder.file, currentOrder.fileLen, frameStart);
             return ESP_OK;
         }
@@ -190,11 +200,13 @@ namespace AudioPlayer
             ESP_ERROR_CHECK(i2s_channel_reconfig_std_clock(tx_handle, &clk_cfg));
             ESP_ERROR_CHECK(i2s_channel_enable(tx_handle));
             this->currentSampleRateHz = currentOrder.sampleRate;
+            if(codecManager) codecManager->SetPowerState(true);
             ESP_LOGI(TAG, "Successfully initialized a new PCM sound play task. File=%p; FileLen=%zu; SampleRate %lu", currentOrder.file, currentOrder.fileLen, currentOrder.sampleRate);
             return ESP_OK;
         }
 
         esp_err_t InitSilence(){
+            if(codecManager) codecManager->SetPowerState(false);
             return ESP_OK;
         }
 
@@ -205,26 +217,26 @@ namespace AudioPlayer
             return currentOrder.type!=AudioType::SILENCE;
         }
 
-        esp_err_t PlayMP3(const uint8_t *file, size_t fileLen, bool stopPrevious)
+        esp_err_t PlayMP3(const uint8_t *file, size_t fileLen, uint8_t volume, bool cancelPrevious)
         {
             if (tx_handle==nullptr)
             {
                 ESP_LOGE(TAG, "AudioPlayer not initialized");
                 return ESP_FAIL;
             }
-            AudioOrder ao{AudioType::MP3, file, fileLen, 0, stopPrevious};
+            AudioOrder ao{AudioType::MP3, file, fileLen, 0, volume, cancelPrevious};
             xQueueOverwrite(orderQueue, &ao);
             return ESP_OK;
         }
 
-        esp_err_t PlayPCM(const uint8_t *file, size_t fileLen, uint32_t sampleRate,  bool stopPrevious)
+        esp_err_t PlayPCM(const uint8_t *file, size_t fileLen, uint32_t sampleRate, uint8_t volume,  bool cancelPrevious)
         {
             if (tx_handle==nullptr)
             {
                 ESP_LOGE(TAG, "AudioPlayer not initialized");
                 return ESP_FAIL;
             }
-            AudioOrder ao{AudioType::PCM, file, fileLen, sampleRate, stopPrevious};
+            AudioOrder ao{AudioType::PCM, file, fileLen, sampleRate, volume, cancelPrevious};
             xQueueOverwrite(orderQueue, &ao);
             return ESP_OK;
         }
@@ -257,6 +269,12 @@ namespace AudioPlayer
                             InitSilence();
                             break;
                     }
+                    if(codecManager){
+                        codecManager->SetVolume(currentOrder.volume);
+                    }
+                    else{
+                        this->gainF2P6=currentOrder.volume;
+                    }
                 }
             }
 
@@ -283,9 +301,10 @@ namespace AudioPlayer
             SetGain(1.0);
         }
 
-        esp_err_t InitExternalI2SDAC(gpio_num_t bck, gpio_num_t ws, gpio_num_t data)
+        esp_err_t InitExternalI2SDAC(gpio_num_t bck, gpio_num_t ws, gpio_num_t data, CodecManager::M* codecManager=nullptr)
         {
             ESP_LOGI(TAG, "Initializing AudioPlayer for external I2S DAC");
+            this->codecManager=codecManager;
             i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
             chan_cfg.auto_clear = true; // Auto clear the legacy data in the DMA buffer
             ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_handle, nullptr));

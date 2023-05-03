@@ -143,6 +143,11 @@ constexpr const T clamp_kl( const T v, const T lo, const T hi)
     return v<lo?lo:v>hi?hi:v;
 }
 
+template <typename T>
+T clip(const T& n, const T& lower, const T& upper) {
+  return std::max(lower, std::min(n, upper));
+}
+
 
 
 bool GetBitInU8Buf(const uint8_t *buf, size_t offset, size_t bitIdx);

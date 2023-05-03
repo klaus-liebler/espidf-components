@@ -72,12 +72,6 @@ namespace WIFIMGR
         CONNECTED,
     };
 
-    enum class NETWORK_MODE
-    {
-        WIFI_ONLY,
-        ETH_ONLY,
-        WIFI_AND_ETH,
-    };
 
     /**
      * @brief simplified reason codes for a lost connection.
@@ -100,7 +94,6 @@ namespace WIFIMGR
 
     esp_netif_t *wifi_netif_sta{nullptr};
     esp_netif_t *wifi_netif_ap{nullptr};
-    esp_netif_t *eth_netif{nullptr};
     
     wifi_config_t wifi_config_sta = {}; // 132byte
     wifi_config_t wifi_config_ap = {};  // 132byte
@@ -419,7 +412,7 @@ namespace WIFIMGR
             ESP_LOGI(TAG, "IP_EVENT_STA_LOST_IP");
             break;
         }
-
+#ifdef USE_ETH
         case IP_EVENT_ETH_GOT_IP:
         {
             ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
@@ -437,6 +430,7 @@ namespace WIFIMGR
             ESP_LOGI(TAG, "IP_EVENT_ETH_LOST_IP");
             break;
         }
+#endif
         }
     }
 
@@ -652,9 +646,9 @@ namespace WIFIMGR
         return ESP_OK;
     }
 
+#ifdef USE_ETH
     esp_err_t initEth(gpio_num_t mdc, gpio_num_t mdio, gpio_num_t phyEnable)
     {
-#ifdef USE_ETH
         esp_netif_config_t cfg = ESP_NETIF_DEFAULT_ETH();
         eth_netif = esp_netif_new(&cfg);
         // Init common MAC and PHY configs to default
@@ -679,13 +673,13 @@ namespace WIFIMGR
         ESP_ERROR_CHECK(esp_netif_set_hostname(eth_netif, buffer));
         ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
         ESP_ERROR_CHECK(esp_eth_start(eth_handle));
-#endif
         return ESP_OK;
     }
+#endif
 
     
 
-    esp_err_t InitAndRun(bool resetStoredWifiConnection, uint8_t *http_request_response_buffer, size_t http_request_response_buffer_len, NETWORK_MODE networkMode, gpio_num_t mdc, gpio_num_t mdio, gpio_num_t phyEnable)
+    esp_err_t InitAndRun(bool resetStoredWifiConnection, uint8_t *http_request_response_buffer, size_t http_request_response_buffer_len, bool init_netif_and_create_event_loop=true)
     {
         http_buffer = http_request_response_buffer;
         http_buffer_len = http_request_response_buffer_len;
@@ -698,22 +692,14 @@ namespace WIFIMGR
 
         wifi_manager_mutex = xSemaphoreCreateMutex();
 
-        if (networkMode == NETWORK_MODE::WIFI_ONLY|| networkMode == NETWORK_MODE::WIFI_AND_ETH || networkMode == NETWORK_MODE::ETH_ONLY
-         )
+        if (init_netif_and_create_event_loop)
         {
             ESP_ERROR_CHECK(esp_netif_init());
             ESP_ERROR_CHECK(esp_event_loop_create_default());
             ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL, NULL));
         }
 
-        if (networkMode == NETWORK_MODE::WIFI_ONLY || networkMode == NETWORK_MODE::WIFI_AND_ETH)
-        {
-            initWifi(resetStoredWifiConnection);
-        }
-        if (networkMode == NETWORK_MODE::ETH_ONLY || networkMode == NETWORK_MODE::WIFI_AND_ETH)
-        {
-            initEth(mdc, mdio, phyEnable);
-        }
+        initWifi(resetStoredWifiConnection);
 
         // prepare simple network time protocol client and start it, when we got an IP-Adress (see event handler)
         sntp_setoperatingmode(SNTP_OPMODE_POLL);

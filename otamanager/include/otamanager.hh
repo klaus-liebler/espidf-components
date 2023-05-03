@@ -143,6 +143,7 @@ namespace otamanager
                 }
 
                 if (esp_https_ota_get_img_desc(https_ota_handle, &app_desc_ota) != ESP_OK) {
+                    esp_https_ota_abort(https_ota_handle);
                     ESP_LOGE(TAG, "esp_https_ota_read_img_desc failed");
                     continue;
                 }

@@ -1,7 +1,10 @@
 #pragma once
 
 #include <inttypes.h>
+#include <esp_log.h>
+#include "esp_timer.h"
 #include <driver/ledc.h>
+
 
 struct Note
 {
@@ -24,18 +27,18 @@ private:
         ledc_timer_config_t buzzer_timer;
         buzzer_timer.duty_resolution = LEDC_TIMER_10_BIT; // resolution of PWM duty
         buzzer_timer.freq_hz = freqHz;                    // frequency of PWM signal
-        buzzer_timer.speed_mode = LEDC_HIGH_SPEED_MODE;   // timer mode
+        buzzer_timer.speed_mode = LEDC_LOW_SPEED_MODE;   // timer mode
         buzzer_timer.timer_num = LEDC_TIMER_2;            // timer index
         buzzer_timer.clk_cfg = LEDC_AUTO_CLK;
         ledc_timer_config(&buzzer_timer);
-        ledc_set_duty(LEDC_HIGH_SPEED_MODE, this->channel, 512);
-        ledc_update_duty(LEDC_HIGH_SPEED_MODE, this->channel);
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, this->channel, 512);
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, this->channel);
     }
 
     void EndBuzzer()
     {
-        ledc_set_duty(LEDC_HIGH_SPEED_MODE, this->channel, 0);
-        ledc_update_duty(LEDC_HIGH_SPEED_MODE, this->channel);
+        ledc_set_duty(LEDC_LOW_SPEED_MODE, this->channel, 0);
+        ledc_update_duty(LEDC_LOW_SPEED_MODE, this->channel);
     }
 
 public:
@@ -51,21 +54,22 @@ public:
     {
         this->channel=channel;
         //Buzzer
-        ledc_timer_config_t buzzer_timer;
+        ledc_timer_config_t buzzer_timer={};
         buzzer_timer.duty_resolution = LEDC_TIMER_10_BIT; // resolution of PWM duty
         buzzer_timer.freq_hz = 440;                       // frequency of PWM signal
-        buzzer_timer.speed_mode = LEDC_HIGH_SPEED_MODE;   // timer mode
+        buzzer_timer.speed_mode = LEDC_LOW_SPEED_MODE;   // timer mode
         buzzer_timer.timer_num = timer_num;            // timer index
         buzzer_timer.clk_cfg = LEDC_AUTO_CLK;
         ESP_ERROR_CHECK(ledc_timer_config(&buzzer_timer));
 
-        ledc_channel_config_t buzzer_channel;
-        buzzer_channel.channel = channel;
-        buzzer_channel.duty = 0;
+        ledc_channel_config_t buzzer_channel={};
         buzzer_channel.gpio_num = pin;
-        buzzer_channel.speed_mode = LEDC_HIGH_SPEED_MODE;
-        buzzer_channel.hpoint = 0;
+        buzzer_channel.speed_mode = LEDC_LOW_SPEED_MODE;
+        buzzer_channel.channel = channel;
+        buzzer_channel.intr_type=LEDC_INTR_DISABLE;
         buzzer_channel.timer_sel = timer_num;
+        buzzer_channel.duty = 0;
+        buzzer_channel.hpoint = 0;
         ESP_ERROR_CHECK(ledc_channel_config(&buzzer_channel));
     }
 
@@ -75,12 +79,12 @@ public:
 
     void PlaySong(uint32_t songNumber)
     {
-        if (songNumber >= sizeof(SONGS) / sizeof(Note))
+        if (songNumber >= sizeof(SOUNDS) / sizeof(Note))
             songNumber = 0;
         this->song_nextNoteIndex = 0;
         this->song_nextNoteTimeMs = GetMillis64();
         this->songNumber = songNumber;
-        ESP_LOGI(TAG, "Set Song to %d", songNumber);
+        ESP_LOGI(TAG, "Set Song to %ld", songNumber);
     }
 
     void Loop()
@@ -91,7 +95,7 @@ public:
         if (GetMillis64() < song_nextNoteTimeMs)
             return;
 
-        const Note note = SONGS[songNumber][song_nextNoteIndex];
+        const Note note = SOUNDS[songNumber][song_nextNoteIndex];
         if (note.freq == 0)
         {
             ESP_LOGD(TAG, "Mute Note and wait %d", note.durationMs);
