@@ -7,6 +7,8 @@
 #include "driver/gpio.h"
 #include "driver/spi_master.h"
 #include "esp_err.h"
+#include <esp_sntp.h>
+#include <time.h>
 
 #define TAG "WIFI_ETH"
 namespace WIFI_ETH
@@ -57,7 +59,7 @@ namespace WIFI_ETH
             esp_netif_get_hostname(eth_netif, &hostname);
             ESP_LOGI(TAG, "IP_EVENT_ETH_GOT_IP with hostname %s: ETHIP:" IPSTR " ETHMASK:" IPSTR " ETHGW:" IPSTR,
                      hostname, IP2STR(&ip_info->ip), IP2STR(&ip_info->netmask), IP2STR(&ip_info->gw));
-
+            sntp_init();
             break;
         }
 
@@ -67,19 +69,19 @@ namespace WIFI_ETH
             break;
         }
         }
-
-        ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-        const esp_netif_ip_info_t *ip_info = &event->ip_info;
-
-        ESP_LOGI(TAG, "Ethernet Got IP Address");
-        ESP_LOGI(TAG, "~~~~~~~~~~~");
-        ESP_LOGI(TAG, "ETHIP:" IPSTR, IP2STR(&ip_info->ip));
-        ESP_LOGI(TAG, "ETHMASK:" IPSTR, IP2STR(&ip_info->netmask));
-        ESP_LOGI(TAG, "ETHGW:" IPSTR, IP2STR(&ip_info->gw));
-        ESP_LOGI(TAG, "~~~~~~~~~~~");
     }
 
-    void initETH(bool already_called_netif_init_and_event_loop, spi_host_device_t spiHost, gpio_num_t miso, gpio_num_t mosi, gpio_num_t sclk, uint32_t SPI_MASTER_FREQ_X, gpio_num_t reset, gpio_num_t cs, gpio_num_t irq, uint32_t phyAddress)
+    static void time_sync_notification_cb(struct timeval *tv)
+    {
+        char strftime_buf[64];
+        struct tm timeinfo;
+        time_t now = time(0); // Get the system time
+        localtime_r(&now, &timeinfo); //convert to localtime
+        strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo); //convert to string representation
+        ESP_LOGI(TAG, "Notification of a time synchronization. The current date/time in Berlin is: %s", strftime_buf);
+    }
+
+    esp_err_t initETH(bool already_called_netif_init_and_event_loop, spi_host_device_t spiHost, gpio_num_t miso, gpio_num_t mosi, gpio_num_t sclk, uint32_t SPI_MASTER_FREQ_X, gpio_num_t reset, gpio_num_t cs, gpio_num_t irq, uint32_t phyAddress)
     {
         if (!already_called_netif_init_and_event_loop)
         {
@@ -146,6 +148,16 @@ namespace WIFI_ETH
         ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
         ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL));
         ESP_ERROR_CHECK(esp_eth_start(eth_handle_spi));
+
+        sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
+        sntp_setservername(0, "pool.ntp.org");
+        sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+        // Set timezone to Berlin
+        setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
+        tzset();
+
+        return ESP_OK;
     }
 }
 #undef TAG

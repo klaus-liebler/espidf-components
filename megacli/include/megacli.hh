@@ -13,8 +13,12 @@
 #include <esp_log.h>
 #include <esp_chip_info.h>
 #include <esp_ota_ops.h>
+#include <i2c.hh>
+#include "shell_handler.hh"
 #define TAG "CLI"
 /*various concepts stolen from https://github.com/antirez/linenoise and https://github.com/JingoC/terminal/*/
+
+void FreeMemoryForOTA();
 
 namespace CLI
 {
@@ -96,7 +100,7 @@ namespace CLI
     class AbstractCommand
     {
     public:
-        virtual int Execute(ShellCallback *cb, int argc, char *argv[]) = 0;
+        virtual int Execute(IShellCallback *cb, int argc, char *argv[]) = 0;
         virtual const char *GetName() = 0;
     };
 
@@ -123,22 +127,10 @@ namespace CLI
         }
     };
 
-    class HelloCommand : public AbstractCommand
-    {
-        int Execute(ShellCallback *cb, int argc, char *argv[]) override
-        {
-            cb->printf("\r\nHello World!\r\n");
-            return 0;
-        }
-        const char *GetName() override
-        {
-            return "hello";
-        }
-    };
 
     class HelpCommand : public AbstractCommand
     {
-        int Execute(ShellCallback *cb, int argc, char *argv[]) override
+        int Execute(IShellCallback *cb, int argc, char *argv[]) override
         {
             cb->printf("\r\nI am the help command\r\n");
             return 0;
@@ -156,7 +148,7 @@ namespace CLI
             return "systeminfo";
         }
 
-        int Execute(ShellCallback *cb, int argc, char *argv[]) override
+        int Execute(IShellCallback *cb, int argc, char *argv[]) override
         {
             uint32_t res = esp_get_free_heap_size();
 
@@ -209,67 +201,129 @@ namespace CLI
         }
     };
 
-    class CLIExecutionOrder{
-        public:
+    class I2CDetectCommand : public CLI::AbstractCommand
+    {
+        int Execute(IShellCallback *cb, int argc, char *argv[]) override
+        {
+            arg_int *busindexArg = arg_intn("F", nullptr, "<n>", 0, 2, "bus index");
+            auto end_arg = arg_end(2);
+            int busindex{0};
+
+            void *argtable[] = {busindexArg, end_arg};
+
+            FILE *fp = funopen(cb, nullptr, &CLI::Static_writefn, nullptr, nullptr);
+            int exitcode{0};
+
+            int nerrors = arg_parse(argc, argv, argtable);
+            if (nerrors > 0)
+            {
+                // Display the error details contained in the arg_end struct.
+                arg_print_errors(fp, end_arg, GetName());
+                exitcode = 1;
+                goto exit;
+            }
+            if (busindexArg->count > 0)
+            {
+                busindex = busindexArg->ival[0];
+            }
+            if (I2C::Discover((i2c_port_t)busindex, fp) != ESP_OK)
+            {
+                cb->printf("Error while i2cdetect!\r\n");
+            }
+        exit:
+            // deallocate each non-null entry in argtable[]
+            arg_freetable(argtable, sizeof(argtable) / sizeof(argtable[0]));
+            fclose(fp);
+            return exitcode;
+        }
+
+        const char *GetName() override
+        {
+            return "i2cdetect";
+        }
+    };
+
+    class RestartCommand : public CLI::AbstractCommand
+    {
+        int Execute(IShellCallback *cb, int argc, char *argv[]) override
+        {
+            cb->printf(COLOR_RESET COLOR_RED "Restarting...\r\n" COLOR_RESET);
+            vTaskDelay(pdMS_TO_TICKS(1000));
+            esp_restart();
+            return 0;
+        }
+
+        const char *GetName() override
+        {
+            return "restart";
+        }
+    };
+
+    class CLIExecutionOrder
+    {
+    public:
         ShellId shellId;
-        ShellCallback *cb;
-        char* buffer;
-        CLIExecutionOrder(ShellId shellId, ShellCallback *cb, std::string commandLine):shellId(shellId), cb(cb){
-            buffer = new char[commandLine.length()+1];
+        IShellCallback *cb;
+        char *buffer;
+        CLIExecutionOrder(ShellId shellId, IShellCallback *cb, std::string commandLine) : shellId(shellId), cb(cb)
+        {
+            buffer = new char[commandLine.length() + 1];
             strcpy(buffer, commandLine.c_str());
         }
 
-        ~CLIExecutionOrder(){
+        ~CLIExecutionOrder()
+        {
             delete buffer;
         }
     };
-    
-    class MegaCli : public ShellHandler
+
+    class MegaCli : public IShellHandler
     {
     public:
-        MegaCli(bool addDefaultInternalCommands, std::vector<CLI::AbstractCommand*> additionalCommands)
+        MegaCli(bool addDefaultInternalCommands, std::vector<CLI::AbstractCommand *> additionalCommands)
         {
             history = HistoryQueue((size_t)40);
             history.AddToQueueConsiderSizeLimit("");
 
-            msg_queue = xQueueCreate(1, sizeof(CLIExecutionOrder*));
+            msg_queue = xQueueCreate(1, sizeof(CLIExecutionOrder *));
 
-            this->commands=additionalCommands;
-            if(addDefaultInternalCommands){
-                this->commands.push_back(new HelloCommand());
+            this->commands = additionalCommands;
+            if (addDefaultInternalCommands)
+            {
                 this->commands.push_back(new HelpCommand());
                 this->commands.push_back(new SystemInfoCommand());
+                this->commands.push_back(new I2CDetectCommand());
+                this->commands.push_back(new RestartCommand());
             }
-            
         }
 
-        ShellId beginShell(ShellCallback *cb)
+        ShellId beginShell(IShellCallback *cb)
         {
             ShellId shellId = 0;
             cb->printf("\r\n"
- " __  __                   _____ _      _____ \r\n"
- "|  \\/  |                 / ____| |    |_   _|\r\n"
- "| \\  / | ___  __ _  __ _| |    | |      | |  \r\n"
- "| |\\/| |/ _ \\/ _` |/ _` | |    | |      | |  \r\n"
- "| |  | |  __/ (_| | (_| | |____| |____ _| |_ \r\n"
- "|_|  |_|\\___|\\__, |\\__,_|\\_____|______|_____|\r\n"
- "              __/ |                          \r\n"
- "             |___/                           \r\n"
-"\r\n");
+                       " __  __                   _____ _      _____ \r\n"
+                       "|  \\/  |                 / ____| |    |_   _|\r\n"
+                       "| \\  / | ___  __ _  __ _| |    | |      | |  \r\n"
+                       "| |\\/| |/ _ \\/ _` |/ _` | |    | |      | |  \r\n"
+                       "| |  | |  __/ (_| | (_| | |____| |____ _| |_ \r\n"
+                       "|_|  |_|\\___|\\__, |\\__,_|\\_____|______|_____|\r\n"
+                       "              __/ |                          \r\n"
+                       "             |___/                           \r\n"
+                       "\r\n");
             cb->printf("Welcome to MegaCLI v0.0.1. Type 'help' to get help.\r\n");
-            const esp_app_desc_t * app=esp_app_get_description();
-		    cb->printf("Firmware \"%s\" version %s compiled on %s %s with IDF %s.\r\n", app->project_name, app->version,  app->date, app->time, app->idf_ver);
+            const esp_app_desc_t *app = esp_app_get_description();
+            cb->printf("Firmware \"%s\" version %s compiled on %s %s with IDF %s.\r\n", app->project_name, app->version, app->date, app->time, app->idf_ver);
             cb->printf("Free Heap %lu bytes.\r\n", esp_get_free_heap_size());
-            
+
             time_t now;
             struct tm timeinfo;
             char strftime_buf[64];
             time(&now);
-            
+
             localtime_r(&now, &timeinfo);
             strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
             cb->printf("System Time %s \r\n", strftime_buf);
-            
+
             esp_chip_info_t chip_info;
             esp_chip_info(&chip_info);
             cb->printf("Chip Information: Chip Model %i Revision %i\r\n", chip_info.model, chip_info.revision);
@@ -277,16 +331,16 @@ namespace CLI
             return shellId;
         }
 
-        void endShell(ShellId shellId, ShellCallback *cb)
+        void endShell(ShellId shellId, IShellCallback *cb)
         {
             return;
         }
 
-        int insertChar(char c, ShellId shellId, ShellCallback *cb)
+        int insertChar(char c, ShellId shellId, IShellCallback *cb)
         {
-            int old_history_index=this->history_index;
+            int old_history_index = this->history_index;
             copyCurrentHistoryToFrontForEdit(shellId, cb);
-            ESP_LOGD(TAG, "linenoiseEditInsert old_history_index=%i historyIndex=%i, char=%c, pos=%u, strlen=%u", old_history_index, history_index, c, pos, history.front().size());
+            ESP_LOGD(TAG, "insertChar old_history_index=%i historyIndex=%i, char=%c, pos=%u, strlen=%u", old_history_index, history_index, c, pos, history.front().size());
             if (history.front().size() == pos)
             {
                 history.front().push_back(c);
@@ -305,7 +359,7 @@ namespace CLI
         }
 
         /* Move cursor on the left. */
-        void moveLeft(ShellId shellId, ShellCallback *cb)
+        void moveLeft(ShellId shellId, IShellCallback *cb)
         {
             // not necessary, as there is no editing! copyCurrentHistoryToFrontForEdit();
             if (pos > 0)
@@ -315,9 +369,9 @@ namespace CLI
             }
         }
 
-        void moveInHistory(bool directionNext, ShellId shellId, ShellCallback *cb)
+        void moveInHistory(bool directionNext, ShellId shellId, IShellCallback *cb)
         {
-            ESP_LOGD(TAG, "moveInHistory history_index=%d, history_size=%u, end=%s", history_index, history.size(), history.back().c_str());
+            
             if (directionNext)
             {
                 if (history_index - 1 < 0)
@@ -327,7 +381,8 @@ namespace CLI
                 else
                 {
                     history_index--;
-                    pos=history[history_index].size();
+                    pos = history[history_index].size();
+                    ESP_LOGI(TAG, "moveInHistory next history_index=%d, history_size=%u, cursorPos=%u", history_index, history.size(), pos);
                     refreshLine(cb);
                 }
             }
@@ -340,14 +395,15 @@ namespace CLI
                 else
                 {
                     history_index++;
-                    pos=history[history_index].size();
+                    pos = history[history_index].size();
+                    ESP_LOGI(TAG, "moveInHistory prev history_index=%d, history_size=%u, cursorPos=%u", history_index, history.size(), pos);
                     refreshLine(cb);
                 }
             }
         }
 
         /* Move cursor on the right. */
-        void moveRight(ShellId shellId, ShellCallback *cb)
+        void moveRight(ShellId shellId, IShellCallback *cb)
         {
             if (pos < history[history_index].length())
             {
@@ -357,7 +413,7 @@ namespace CLI
         }
 
         /* Move cursor to the start of the line. */
-        void moveHome(ShellId shellId, ShellCallback *cb)
+        void moveHome(ShellId shellId, IShellCallback *cb)
         {
             if (pos != 0)
             {
@@ -367,7 +423,7 @@ namespace CLI
         }
 
         /* Move cursor to the end of the line. */
-        void moveEnd(ShellId shellId, ShellCallback *cb)
+        void moveEnd(ShellId shellId, IShellCallback *cb)
         {
             size_t len = history[history_index].length();
             if (pos != len)
@@ -379,7 +435,7 @@ namespace CLI
 
         /* Delete the character at the right of the cursor without altering the cursor
          * position. Basically this is what happens with the "Delete" keyboard key. */
-        void doDelete(ShellId shellId, ShellCallback *cb)
+        void doDelete(ShellId shellId, IShellCallback *cb)
         {
             copyCurrentHistoryToFrontForEdit(shellId, cb);
             if (pos < history.front().length())
@@ -390,20 +446,20 @@ namespace CLI
         }
 
         /* Backspace implementation. */
-        void doBackspace(ShellId shellId, ShellCallback *cb)
+        void doBackspace(ShellId shellId, IShellCallback *cb)
         {
             copyCurrentHistoryToFrontForEdit(shellId, cb);
             size_t len = history.front().length();
             ESP_LOGD(TAG, "doBackspace pos=%u len=%u", pos, len);
             if (pos > 0 && len > 0)
             {
-                history.front().replace(pos-1, 1, "");
+                history.front().replace(pos - 1, 1, "");
                 pos--;
                 refreshLine(cb);
             }
         }
 
-        void copyCurrentHistoryToFrontForEdit(ShellId shellId, ShellCallback *cb)
+        void copyCurrentHistoryToFrontForEdit(ShellId shellId, IShellCallback *cb)
         {
             if (history_index == 0)
                 return;
@@ -415,24 +471,25 @@ namespace CLI
             refreshLine(cb);
         }
 
-        void InitAndRunCli(){
-            xTaskCreate(static_task, "CLI Task", 4*4096, this, 8, nullptr);
+        void InitAndRunCli(size_t stackSizeForCommandExecution_bytes=4*8192, int priorityForCommandExecution=8)
+        {
+            xTaskCreate(static_task, "CLI Task", stackSizeForCommandExecution_bytes, this, priorityForCommandExecution, nullptr);
         }
 
-	    void task()
+        void task()
         {
-            CLIExecutionOrder* order{nullptr};
+            CLIExecutionOrder *order{nullptr};
             while (true)
             {
                 // See if there's a message in the queue (do not block)
                 auto ret = xQueueReceive(msg_queue, (void *)&order, portMAX_DELAY);
-                assert(ret==pdTRUE);
+                assert(ret == pdTRUE);
                 assert(order);
                 assert(order->cb);
                 order->cb->printf("\r\n");
-            
+
                 ESP_LOGI(TAG, "executeLine with buf=%s", order->buffer);
-            
+
                 int argc = 0;
                 char *p = strtok(order->buffer, " ");
                 char *argv[16];
@@ -441,59 +498,55 @@ namespace CLI
                     argv[argc++] = p;
                     p = strtok(NULL, " ");
                 }
-                if(!argv[0]){
+                if (!argv[0])
+                {
                     order->cb->printf(COLOR_BRIGHT_RED "No Command found\r\n" COLOR_RESET);
                     refreshLine(order->cb);
                     delete order;
                     continue;
                 }
-                AbstractCommand* theCmd{nullptr};
+                AbstractCommand *theCmd{nullptr};
                 for (auto &cmd : this->commands)
                 {
-                    if (0 == strcmp(cmd->GetName(), argv[0])) theCmd=cmd;
+                    if (0 == strcmp(cmd->GetName(), argv[0]))
+                        theCmd = cmd;
                 }
-                if(theCmd==nullptr){
+                if (theCmd == nullptr)
+                {
                     order->cb->printf(COLOR_BRIGHT_RED "Unknown Command: %s\r\n" COLOR_RESET, order->buffer);
                     refreshLine(order->cb);
                     delete order;
                     continue;
                 }
-                int retval=theCmd->Execute(order->cb, argc, argv);
-                if(retval!=0){
+                int retval = theCmd->Execute(order->cb, argc, argv);
+                if (retval != 0)
+                {
                     order->cb->printf(COLOR_RESET COLOR_YELLOW "\r\nCommand returned %d\r\n" COLOR_RESET, retval);
                 }
                 refreshLine(order->cb);
                 delete order;
             }
-
-            
         }
 
         static void static_task(void *arg)
         {
-            MegaCli* myself =static_cast<MegaCli*>(arg);
+            MegaCli *myself = static_cast<MegaCli *>(arg);
             myself->task();
         }
 
-
-
-        int executeLine(ShellId shellId, ShellCallback *cb)
+        int executeLine(ShellId shellId, IShellCallback *cb)
         {
             this->copyCurrentHistoryToFrontForEdit(shellId, cb);
-            CLIExecutionOrder* order = new CLIExecutionOrder(shellId, cb, history.front());
-            ESP_LOGI(TAG, "Put buffer into queue: %s", order->buffer);
-            xQueueSend(msg_queue, (void *)&order, 10);
+            CLIExecutionOrder *order = new CLIExecutionOrder(shellId, cb, history.front());
+            ESP_LOGD(TAG, "Put buffer into queue: %s", order->buffer);
             history.AddToQueueConsiderSizeLimit("");
             history.front().reserve(MAX_LINE_LENGTH);
-            pos=0;
+            pos = 0;
+            xQueueSend(msg_queue, (void *)&order, 10);
             return 0;
         }
-            
-            
-        
 
-        // Zuweisung oder Übergabe beim String: Es wird eine Deep-Copy zugewiesen
-        int handleSingleChar(const char ch, ShellId shellId, ShellCallback *cb)
+        int handleSingleChar(const char ch, ShellId shellId, IShellCallback *cb)
         {
             KEY_ACTION c = (KEY_ACTION)ch;
 
@@ -565,11 +618,10 @@ namespace CLI
             return 0;
         }
 
-        //Zentrale Einsprungfunktion - muss schnell zurück kehren
-        //Idee: Die Line-Edits werden im Thread gemacht. Sobald ENTER gedrückt wird, also ein Call ausgeführt wird
-        int handleChars(const char *chars, size_t len, ShellId shellId, ShellCallback *cb)
+        // Zentrale Einsprungfunktion - muss schnell zurück kehren
+        int handleChars(const char *chars, size_t len, ShellId shellId, IShellCallback *cb)
         {
-            
+
             if (len > 1 && chars[0] == '\033')
             { // we received an escape sequence
               // we assume: the whole escape sequence comes in one call
@@ -631,10 +683,12 @@ namespace CLI
             }
             // wenn es keine EscapeSequence ist, müssen die Zeichen einzeln kommen! -->nein, bei Copy&Paste kommen sie nicht einzeln!
             int retval{0};
-            for(size_t i=0;i<len;i++){
-            
-                retval= handleSingleChar(chars[i], shellId, cb);
-                if(retval!=0) return retval;
+            for (size_t i = 0; i < len; i++)
+            {
+
+                retval = handleSingleChar(chars[i], shellId, cb);
+                if (retval != 0)
+                    return retval;
             }
             return retval;
         }
@@ -645,21 +699,19 @@ namespace CLI
         QueueHandle_t msg_queue;
 
         size_t pos{0};        // Current cursor position. "0" ist das Zeichen nach dem Prompt (also nicht bezogen auf den Anfang der Zeile sondern auf nach dem Prompt)
-        size_t oldpos{0};     // Previous refresh cursor position.
-        size_t cols{80};      // Number of columns in terminal.
         int history_index{0}; // The history index we are currently showing.
 
-        void clearScreen(ShellCallback *cb)
+        void clearScreen(IShellCallback *cb)
         {
             cb->printf("\x1b[H\x1b[2J");
         }
 
-        void beep(ShellCallback *cb)
+        void beep(IShellCallback *cb)
         {
             cb->printf("\x7");
         }
 
-        void refreshLine(ShellCallback *cb)
+        void refreshLine(IShellCallback *cb)
         {
             std::string buf = std::string("");
             buf.reserve(MAX_LINE_LENGTH + PROMPT_LEN + 10);
@@ -669,7 +721,7 @@ namespace CLI
             assert(cb);
             buf.append(cb->GetUsername(), 4);
             buf.append("> ");
-            
+
             buf.append(history[history_index]);
             /* Erase to right */
             buf.append("\x1b[0K");
@@ -678,6 +730,7 @@ namespace CLI
             buf.append(std::to_string(pos + PROMPT_LEN));
             buf.append("C");
             cb->printf(buf.c_str());
+            ESP_LOGI(TAG, "Refresh sent=%s", history[history_index].c_str());
         }
     };
 }

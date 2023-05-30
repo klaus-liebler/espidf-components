@@ -15,7 +15,7 @@ namespace CLI
 {
 	int Static_writefn(void *data, const char *buffer, int size)
 	{
-		ShellCallback *cb = static_cast<ShellCallback *>(data);
+		IShellCallback *cb = static_cast<IShellCallback *>(data);
 		cb->printf("%.*s", size, buffer);
 		return 0;
 	}

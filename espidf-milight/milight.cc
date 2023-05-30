@@ -1,8 +1,9 @@
 #include <stdio.h>
 #include "sdkconfig.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "milight.hh"
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <freertos/event_groups.h>
+#include <milight.hh>
 
 #define TAG "MILIGHT"
 class MilightDecoder
@@ -103,9 +104,14 @@ public:
         return (((packet[1] & 0xF0) << 24) | (packet[2] << 16) | (packet[3] << 8) | (packet[7]));
     }
 };
-extern "C" void milightReceiverTask(void *arg)
+
+extern "C" void Milight::task_static(void *arg)
 {
-    Milight *milight = (Milight *)arg;
+    Milight *myself = (Milight *)arg;
+    myself->task();
+}
+
+void Milight::task(){
     MilightDecoder dec{};
     uint8_t buf[20] __attribute__((aligned(4)));
     uint32_t previousID = 0;
@@ -114,10 +120,13 @@ extern "C" void milightReceiverTask(void *arg)
 
     while (true)
     {
+       if(xEventGroupGetBits(this->eventGroup) & (this->stop_requestBit)){
+            break;
+        }
         vTaskDelay(pdMS_TO_TICKS(50));
-        if (!milight->recv->IsDataReady())
+        if (!recv->IsDataReady())
             continue;
-        milight->recv->GetRxData(buf);
+        recv->GetRxData(buf);
         uint8_t *packet = buf + 1; //to ignore the very first byte, which is the satus byte (clocked out first). packet points to the packetLen
         //ESP_LOG_BUFFER_HEXDUMP("RAW", packet, PAYLOAD_SIZE, ESP_LOG_INFO);
         int err = dec.transformPacket(packet);
@@ -138,22 +147,21 @@ extern "C" void milightReceiverTask(void *arg)
         uint8_t cmd = packet[4];
         uint8_t arg = packet[5];
         ESP_LOGI(TAG, "CMD %0d ARG/SEQ %3d", cmd, arg);
-        milight->callback->ReceivedFromMilight(cmd, arg);
+        callback->ReceivedFromMilight(cmd, arg);
+        
     }
+    ESP_LOGI(TAG, "Manager::Task stopped");
+    xEventGroupSetBits(this->eventGroup, this->stop_requestBit*2);//STOPPED BIT ist one bit to the left
+    vTaskDelete(nullptr);
 }
 
-Milight::Milight(MilightCallback *callback) : callback(callback) {}
+Milight::Milight(MilightCallback *callback, EventGroupHandle_t eventGroup, EventBits_t stop_requestBit) : callback(callback), eventGroup(eventGroup), stop_requestBit(stop_requestBit) {}
 
-esp_err_t Milight::Init(spi_host_device_t hostDevice, int dmaChannel, gpio_num_t ce_pin, gpio_num_t csn_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin)
+esp_err_t Milight::SetupAndRun(spi_host_device_t hostDevice, int dmaChannel, gpio_num_t ce_pin, gpio_num_t csn_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin)
 {
     this->recv = new Nrf24Receiver();
     recv->Setup(hostDevice, dmaChannel, ce_pin, csn_pin, miso_pin, mosi_pin, sclk_pin);
     uint8_t address[6]{0x90, 0x4e, 0x6c, 0x55, 0x55}; //for 9-Byte payload
     recv->Config(10, 14, address, 5, 0, Rf24Datarate::RF24_1MBPS, Rf24PowerAmp::RF24_PA_HIGH);
-    return ESP_OK;
-}
-
-esp_err_t Milight::Start()
-{
-    return xTaskCreate(milightReceiverTask, "milightReceiverTask", 4096 * 4, this, 12, NULL) == pdPASS ? ESP_OK : ESP_FAIL;
+    return xTaskCreate(task_static, "milightReceiverTask", 4096 * 4, this, 12, NULL) == pdPASS ? ESP_OK : ESP_FAIL;
 }

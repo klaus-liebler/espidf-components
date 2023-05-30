@@ -155,7 +155,7 @@ namespace AudioPlayer
                 for (size_t i = 0; i < samples * 2; i++)
                 {
                     int32_t v = (outBuffer[i] * gainF2P6) >> 6;
-                    outBuffer[i]=clip(v, INT16_MIN, INT16_MAX);
+                    outBuffer[i]=clip(v, (int32_t)INT16_MIN, (int32_t)INT16_MAX);
                     outBuffer[i] += 0x8000;
                 }
             }
@@ -164,7 +164,7 @@ namespace AudioPlayer
                 for (size_t i = 0; i < samples * 2; i++)
                 {
                     int32_t v = (outBuffer[i] * gainF2P6) >> 6;
-                    outBuffer[i]=clip(v, INT16_MIN, INT16_MAX);
+                    outBuffer[i]=clip(v, (int32_t)INT16_MIN, (int32_t)INT16_MAX);
                 }
             }
             

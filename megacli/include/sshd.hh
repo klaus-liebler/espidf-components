@@ -19,7 +19,7 @@ namespace sshd
 		User(const char* Username, const char* Password, bool IsPrivileged):Username(Username), Password(Password), IsPrivileged(IsPrivileged){}
 	};
 	
-	class ConnectionCtx : public ShellCallback
+	class ConnectionCtx : public IShellCallback
 	{
 	public:
 		ssh_session cc_session{nullptr};
@@ -90,7 +90,7 @@ namespace sshd
 		};
 		int auth_methods;
 		const char *host_key;
-		ShellHandler *shellHandler;
+		IShellHandler *shellHandler;
 		std::array<ConnectionCtx *, 3> connection_ctx_array{nullptr, nullptr, nullptr};
 
 		ConnectionCtx *lookup_connectioncontext(ssh_session session);
@@ -108,7 +108,7 @@ namespace sshd
 		static void static_task(void *arg);
 		std::vector<User>* users;
 	public:
-		static SshDemon *InitAndRunSshD(const char *hardcoded_example_host_key, ShellHandler *handler, std::vector<User>* users);
+		static SshDemon *InitAndRunSshD(const char *hardcoded_example_host_key, IShellHandler *handler, std::vector<User>* users);
 	};
 
 }

@@ -416,7 +416,7 @@ namespace sshd{
 		myself->task();
 	}
 
-	SshDemon *SshDemon::InitAndRunSshD(const char *host_key, ShellHandler* handler, std::vector<User>* users)
+	SshDemon *SshDemon::InitAndRunSshD(const char *host_key, IShellHandler* handler, std::vector<User>* users)
 	{
 		SshDemon* demon = new SshDemon();
 		demon->host_key=host_key;

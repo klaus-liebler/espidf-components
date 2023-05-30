@@ -12,7 +12,7 @@
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
-namespace SOFTAP{
+namespace WIFISOFTAP{
 
 
 static const char *TAG = "wifi softAP";
@@ -31,9 +31,9 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-void init(bool already_called_netif_init_and_event_loop, std::string ssid, std::string password)
+void Init(std::string ssid, std::string password, bool init_netif_and_create_event_loop=true)
 {
-    if(!already_called_netif_init_and_event_loop){
+    if(init_netif_and_create_event_loop){
         ESP_ERROR_CHECK(esp_netif_init());
         ESP_ERROR_CHECK(esp_event_loop_create_default());
     }

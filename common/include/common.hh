@@ -13,6 +13,21 @@ constexpr uint64_t IO(int n){
     return (1ULL<<n);
 }
 
+#define MESSAGELOG_ON_ERROR(x, mc) do {                               \
+        esp_err_t err_rc_ = (x);                                                                \
+        if (unlikely(err_rc_ != ESP_OK)) {                                                      \
+            ml->Log(mc, (uint32_t)err_rc_);        \
+            ESP_LOGE(TAG, "%s(%d) %s %lu" , __FUNCTION__, __LINE__, #mc, (uint32_t)err_rc_ ); \                                                                     \                                                                    \
+        }                                                                                       \
+    } while(0)
+#define MESSAGELOG_ON_ERRORCODE(x, mc) do {                                       \
+        ErrorCode err_rc_ = (x);                                                                \
+        if (err_rc_ != ErrorCode::OK) {   \
+            ml->Log(mc, (uint32_t)err_rc_);        \                                                   \
+            ESP_LOGE(TAG, "%s(%d) %s %lu" , __FUNCTION__, __LINE__, #mc, (uint32_t)err_rc_ ); \
+        }                                                                                       \
+    } while(0)
+
 #define BREAK_ON_ERROR(x, format, ...) do {                               \
         esp_err_t err_rc_ = (x);                                                                \
         if (unlikely(err_rc_ != ESP_OK)) {                                                      \
