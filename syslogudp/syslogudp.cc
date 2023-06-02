@@ -1,5 +1,5 @@
 #include <syslogudp.hh>
-#include <common.hh>
+#include <common-esp32.hh>
 #include <string.h>
 #define TAG "SYSLOG"
 

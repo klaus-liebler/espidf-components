@@ -2,7 +2,7 @@
 #include <i2c.hh>
 #include <esp_log.h>
 #include <string.h>
-#include <common.hh>
+#include <common-esp32.hh>
 #include <errorcodes.hh>
 #include "pca9555.hh"
 #define TAG "PCA9555"

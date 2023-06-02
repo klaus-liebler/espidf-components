@@ -1,5 +1,6 @@
 idf_component_register(
-    SRCS "common.cc"
+    SRCS "common-esp32.cc" "common.cc"
     INCLUDE_DIRS "include"
+    REQUIRES driver nvs_flash
     )
 

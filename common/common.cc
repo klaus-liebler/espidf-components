@@ -1,7 +1,5 @@
 #include "common.hh"
 
-
-
 bool GetBitInU8Buf(const uint8_t *buf, size_t offset, size_t bitIdx){
     uint8_t b = buf[offset + (bitIdx>>3)];
     uint32_t bitpos = bitIdx & 0b111;

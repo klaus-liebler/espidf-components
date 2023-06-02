@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="content-type" content="text/html; charset=utf-8">
+    <title>ESP32 System Manager</title>
+    <link rel="stylesheet" href="app.css" inline>
+</head>
+
+<body>
+    <h1>Logging Data</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Timestamp</th>
+                <th>Code</th>
+                <th>Description</th>
+                <th>Last Message Data</th>
+                <th>Count</th>
+            </tr>
+        </thead>
+        <tbody id="tblLogs"></tbody>
+    </table>
+    <h1>Application Partitions</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Label</th>
+                <th>Subtype</th>
+                <th>Size [byte]</th>
+                <th>State</th>
+                <th>Is Running</th>
+                <th>Project Name</th>
+                <th>Project Version</th>
+                <th>Compile Date</th>
+                <th>Compile Time</th>
+            </tr>
+        </thead>
+        <tbody id="tblPartitions"></tbody>
+    </table>
+    <h1>Parameters</h1>
+    <table>
+        <thead>
+            <tr>
+                <th>Parameter</th>
+                <th>Value</th>
+            </tr>
+        </thead>
+        <tbody id="tblParameters"></tbody>
+    </table>
+    <h1>OTA</h1>
+    <div><label for="otafile">Firmware file:</label> <input type="file" id="inpOtafile" name="otafile" accept=".bin">
+    </div>
+    <div><input id="btnUpload" type="button" value="Do OTA"/></div>
+    <div><label id="lblProgress" for="prgbProgress">Uploading Firmware</label><progress id="prgbProgress" value="0"
+            max="100">0</progress></div>
+    <h1 class="dangerous">Dangerous Zone</h1>
+    <div><input id="btnRestart" type="button" value="Restart"/></div>
+    <script src="app.js" inline></script>
+</body>
+
+</html>
