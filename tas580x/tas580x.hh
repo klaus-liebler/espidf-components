@@ -6,7 +6,7 @@
 #include <esp_log.h>
 #include <math.h>
 #include <codec_manager.hh>
-#define TAG "tas580x"
+#define TAG "TAS580x"
 
 namespace TAS580x
 {
@@ -203,7 +203,7 @@ namespace TAS580x
 
 		ErrorCode Init(uint8_t initialVolume = 50)
 		{
-			ESP_LOGI(TAG, "setup of the audio amp begins");
+			ESP_LOGI(TAG, "Setup of the TAS580x begins");
 			gpio_set_level(power_down, 0);
 			gpio_reset_pin(power_down);
 			gpio_set_direction(power_down, GPIO_MODE_OUTPUT);

@@ -97,3 +97,10 @@ void WriteUInt32(uint32_t value, uint8_t *message, uint32_t offset);
 float ParseFloat32(const uint8_t * const message, uint32_t offset);
 
 void WriteInt64(int64_t value, uint8_t *message, uint32_t offset);
+void WriteUInt16BigEndian(uint16_t value, uint8_t *message, uint32_t offset);
+
+void WriteInt16BigEndian(int16_t value, uint8_t *message, uint32_t offset);
+
+uint16_t ParseUInt16BigEndian(const uint8_t *const message, uint32_t offset);
+
+int16_t ParseInt16BigEndian(const uint8_t *const message, uint32_t offset);

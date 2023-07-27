@@ -8,7 +8,7 @@
 #include "driver/spi_master.h"
 #include "esp_err.h"
 #include <esp_sntp.h>
-#include <time.h>
+#include <ctime>
 
 #define TAG "WIFI_ETH"
 namespace WIFI_ETH
@@ -59,7 +59,7 @@ namespace WIFI_ETH
             esp_netif_get_hostname(eth_netif, &hostname);
             ESP_LOGI(TAG, "IP_EVENT_ETH_GOT_IP with hostname %s: ETHIP:" IPSTR " ETHMASK:" IPSTR " ETHGW:" IPSTR,
                      hostname, IP2STR(&ip_info->ip), IP2STR(&ip_info->netmask), IP2STR(&ip_info->gw));
-            sntp_init();
+            esp_sntp_init();
             break;
         }
 
@@ -81,7 +81,7 @@ namespace WIFI_ETH
         ESP_LOGI(TAG, "Notification of a time synchronization. The current date/time in Berlin is: %s", strftime_buf);
     }
 
-    esp_err_t initETH(bool already_called_netif_init_and_event_loop, spi_host_device_t spiHost, gpio_num_t miso, gpio_num_t mosi, gpio_num_t sclk, uint32_t SPI_MASTER_FREQ_X, gpio_num_t reset, gpio_num_t cs, gpio_num_t irq, uint32_t phyAddress)
+    void initETH_W5500(bool already_called_netif_init_and_event_loop, spi_host_device_t spiHost, gpio_num_t miso, gpio_num_t mosi, gpio_num_t sclk, uint32_t SPI_MASTER_FREQ_X, gpio_num_t cs, gpio_num_t reset, gpio_num_t irq, uint32_t phyAddress, int intr_flags, const char* hostname="ESP32HOST")
     {
         if (!already_called_netif_init_and_event_loop)
         {
@@ -94,13 +94,10 @@ namespace WIFI_ETH
         esp_netif_config_t cfg_spi = {};
         cfg_spi.base = &esp_netif_config;
         cfg_spi.stack = ESP_NETIF_NETSTACK_DEFAULT_ETH;
-
-        char buffer[32];
   
         eth_netif = esp_netif_new(&cfg_spi);
 
-        sprintf(buffer, "ESP32HOST");
-        ESP_ERROR_CHECK(esp_netif_set_hostname(eth_netif, buffer));
+        ESP_ERROR_CHECK(esp_netif_set_hostname(eth_netif, hostname));
 
 
 
@@ -117,6 +114,7 @@ namespace WIFI_ETH
         buscfg.sclk_io_num = (int)sclk; // 12;
         buscfg.quadwp_io_num = -1;
         buscfg.quadhd_io_num = -1;
+        buscfg.intr_flags=intr_flags;
         ESP_ERROR_CHECK(spi_bus_initialize(spiHost, &buscfg, SPI_DMA_CH_AUTO));
         // Configure SPI interface and Ethernet driver for specific SPI module
         spi_device_interface_config_t spi_devcfg = {};
@@ -124,7 +122,7 @@ namespace WIFI_ETH
         spi_devcfg.clock_speed_hz = SPI_MASTER_FREQ_X;
         spi_devcfg.queue_size = 20;
         spi_devcfg.spics_io_num = (int)cs; // 10;
-        /*IF here is a compilytion error, activate W5500 in config*/
+        
         eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(spiHost, &spi_devcfg);
         w5500_config.int_gpio_num = (int)irq; // 14;
         esp_eth_mac_t *mac_spi = esp_eth_mac_new_w5500(&w5500_config, &mac_config_spi);
@@ -149,15 +147,13 @@ namespace WIFI_ETH
         ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL));
         ESP_ERROR_CHECK(esp_eth_start(eth_handle_spi));
 
-        sntp_setoperatingmode(SNTP_OPMODE_POLL);
-        sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
-        sntp_setservername(0, "pool.ntp.org");
-        sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+        esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        esp_sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
+        esp_sntp_setservername(0, "pool.ntp.org");
+        esp_sntp_set_time_sync_notification_cb(time_sync_notification_cb);
         // Set timezone to Berlin
         setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
         tzset();
-
-        return ESP_OK;
     }
 }
 #undef TAG

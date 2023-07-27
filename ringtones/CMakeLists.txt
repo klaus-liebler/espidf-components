@@ -1,4 +1,4 @@
-idf_component_register(SRCS "ringtoneplayer.cc"
+idf_component_register(SRCS
                        INCLUDE_DIRS "."
                        REQUIRES "driver"
                        )

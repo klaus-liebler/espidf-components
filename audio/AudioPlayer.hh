@@ -14,6 +14,7 @@
 #include <driver/gpio.h>
 #include <driver/i2s_std.h>
 #include <codec_manager.hh>
+#include <common.hh>
 
 #define MINIMP3_ONLY_MP3
 #define MINIMP3_NO_SIMD
@@ -50,7 +51,7 @@ namespace AudioPlayer
         const uint8_t *file;
         size_t fileLen;
         uint32_t sampleRate;//0 means "auto detect"
-        uint8_t volume;
+        uint8_t volume;//0 means: do not change volume
         bool cancelPrevious; //false means: play current AudioOrder to its end
     };
 
@@ -89,6 +90,8 @@ namespace AudioPlayer
                 f = 0.0;
             gainF2P6 = (uint8_t)(f * (1 << 6));
         }
+
+
 
         void AmplifyAndClampAndNormalizeForDAC(int16_t &s){
             int32_t v = (s * gainF2P6) >> 6;
@@ -229,6 +232,11 @@ namespace AudioPlayer
             return ESP_OK;
         }
 
+        void SetGainU8(uint8_t f)
+        {
+            gainF2P6 = f;
+        }
+
         esp_err_t PlayPCM(const uint8_t *file, size_t fileLen, uint32_t sampleRate, uint8_t volume,  bool cancelPrevious)
         {
             if (tx_handle==nullptr)
@@ -301,7 +309,7 @@ namespace AudioPlayer
             SetGain(1.0);
         }
 
-        esp_err_t InitExternalI2SDAC(gpio_num_t bck, gpio_num_t ws, gpio_num_t data, CodecManager::M* codecManager=nullptr)
+        esp_err_t InitExternalI2SDAC(gpio_num_t bck, gpio_num_t ws, gpio_num_t data, gpio_num_t mclk, CodecManager::M* codecManager=nullptr)
         {
             ESP_LOGI(TAG, "Initializing AudioPlayer for external I2S DAC");
             this->codecManager=codecManager;
@@ -312,7 +320,7 @@ namespace AudioPlayer
                 .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(44100),
                 .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
                 .gpio_cfg = {
-                    .mclk = GPIO_NUM_NC,
+                    .mclk = mclk,
                     .bclk = bck,
                     .ws = ws,
                     .dout = data,

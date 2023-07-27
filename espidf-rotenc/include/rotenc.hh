@@ -9,10 +9,10 @@
 
 class cRotaryEncoder{
 public:
-    //pcnt_unit_handle_t pcnt_unit; V5
 	pcnt_unit_handle_t pcnt_unit;
     gpio_num_t phase_a_gpio_num;
     gpio_num_t phase_b_gpio_num;
+    gpio_num_t sw_gpio_num;
 	int16_t minCount;
 	int16_t maxCount;
 	
@@ -22,9 +22,9 @@ public:
 
     esp_err_t Stop();
 
-    esp_err_t GetValue(int *value);
+    esp_err_t GetValue(int16_t &value, bool &isPressed, bool resetValueToZero=true);
 
-	cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, int16_t minCount=INT16_MIN, int16_t maxCount=INT16_MAX);
+	cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, gpio_num_t sw_gpio_num, int16_t minCount=INT16_MIN, int16_t maxCount=INT16_MAX);
 };
 
 

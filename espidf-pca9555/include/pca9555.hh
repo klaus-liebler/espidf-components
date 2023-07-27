@@ -30,6 +30,7 @@ namespace PCA9555
     Dev5 = DEVICE_ADDRESS_BASE + 5,
     Dev6 = DEVICE_ADDRESS_BASE + 6,
     Dev7 = DEVICE_ADDRESS_BASE + 7,
+    DeviceNotFoundDuringSetup=UINT8_MAX,
   };
 
   class M
@@ -48,6 +49,9 @@ namespace PCA9555
     ErrorCode SetOutput(uint16_t output);
     ErrorCode SetInputOutputConfig(uint16_t config);
     ErrorCode SetInversionConfig(uint16_t config);
+    uint8_t GetDeviceAddress(){
+      return (uint8_t)this->device;
+    }
   };
 
 }

@@ -10,7 +10,7 @@ static const char *TAG = "I2C_DEV";
 
 SemaphoreHandle_t I2C::locks[I2C_NUM_MAX];
 
-esp_err_t I2C::Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda)
+esp_err_t I2C::Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda, int intr_alloc_flags)
 {
     i2c_config_t conf;
     conf.mode = I2C_MODE_MASTER;
@@ -21,7 +21,7 @@ esp_err_t I2C::Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda)
     conf.master.clk_speed = 100000;
     conf.clk_flags = 0;
     ESP_ERROR_CHECK(i2c_param_config(port, &conf));
-    ESP_ERROR_CHECK(i2c_driver_install(port, conf.mode, 0, 0, 0));
+    ESP_ERROR_CHECK(i2c_driver_install(port, conf.mode, 0, 0, intr_alloc_flags));
     I2C::locks[(int)port] = xSemaphoreCreateMutex();
     return ESP_OK;
 }
@@ -66,6 +66,34 @@ esp_err_t I2C::WriteSingleReg(const i2c_port_t port, const uint8_t address7bit, 
     xSemaphoreGive(locks[port]);
     return ret;
 }
+
+esp_err_t I2C::WriteDoubleReg(const i2c_port_t port, const uint8_t address7bit, const uint8_t reg_addr, const uint16_t reg_data){
+    
+    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
+    {
+        ESP_LOGE(TAG, "Could not take port mutex %d", port);
+        return ESP_ERR_TIMEOUT;
+    }
+    uint8_t write_buf[3] = {reg_addr, (uint8_t)(reg_data>>8), (uint8_t)(reg_data & 0x00FF)};
+    esp_err_t ret = i2c_master_write_to_device(port, address7bit, write_buf, sizeof(write_buf), pdMS_TO_TICKS(1000));
+    xSemaphoreGive(locks[port]);
+    return ret;
+}
+
+esp_err_t I2C::ReadDoubleReg(const i2c_port_t port, uint8_t address7bit, uint8_t reg_addr, uint16_t *reg_data)
+{
+    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
+    {
+        ESP_LOGE(TAG, "Could not take port mutex %d", port);
+        return ESP_ERR_TIMEOUT;
+    }
+    uint8_t buf[2];
+    esp_err_t espRc = i2c_master_write_read_device(port, address7bit, &reg_addr, 1, buf, 2, pdMS_TO_TICKS(1000));
+    xSemaphoreGive(locks[port]);
+    *reg_data = buf[0]+(buf[1]<<8);
+    return espRc;
+}
+
 
 esp_err_t I2C::ReadReg(const i2c_port_t port, uint8_t address7bit, uint8_t reg_addr, uint8_t *reg_data, size_t len)
 {
@@ -148,7 +176,7 @@ constexpr std::array<const char *, 128> address2name{
     "LM25066",
     "MCP9808 LIS3DH LSM303 COM-15093 47L04/47C04/47L16/47C16",
     "MCP9808 LIS3DH LSM303 COM-15093",
-    "MCP9808 47L04/47C04/47L16/47C16",
+    "MCP9808 47L04/47C04/47L16/47C16 NAU8822L",
     "MCP9808",
     "MCP9808 MMA845x FXOS8700 47L04/47C04/47L16/47C16",
     "MCP9808 MMA845x ADXL345 FXOS8700",

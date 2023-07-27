@@ -114,6 +114,7 @@ namespace PCA9685
     Dev29 = DEVICE_ADDRESS_BASE+29,
     Dev30 = DEVICE_ADDRESS_BASE+30,
     Dev31 = DEVICE_ADDRESS_BASE+31,
+    DeviceNotFoundDuringSetup=UINT8_MAX,
   };
 
   enum struct Output : uint16_t
@@ -172,7 +173,9 @@ namespace PCA9685
       return Loop();
     }
     ErrorCode Loop();
-
+    uint8_t GetDeviceAddress(){
+      return (uint8_t)this->device;
+    }
   private:
   	iI2CPort* i2cPort;
 	  Device device;

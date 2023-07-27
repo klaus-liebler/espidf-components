@@ -11,7 +11,7 @@ namespace PCA9555
 {
     M::M(iI2CPort* i2cPort, Device device, uint16_t initialInputValue,uint16_t configurationRegister, uint16_t polarityInversionRegister):
 		i2cPort(i2cPort), device(device), cachedInput(initialInputValue),configurationRegister(configurationRegister),polarityInversionRegister(polarityInversionRegister) {
-
+			assert(i2cPort!=nullptr);
 		}
     ErrorCode M::Setup(){
 		RETURN_ON_ERRORCODE(i2cPort->IsAvailable((uint8_t)device));

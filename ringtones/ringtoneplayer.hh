@@ -42,9 +42,8 @@ private:
     }
 
 public:
-    uint32_t songNumber;
-    uint64_t song_nextNoteTimeMs;
-    size_t song_nextNoteIndex;
+    const Note* nextNote{nullptr};
+    int64_t nextNoteTimeMs;
     ledc_channel_t channel;
     /**
      * timer_num = LEDC_TIMER_2;
@@ -79,45 +78,48 @@ public:
 
     void PlaySong(uint32_t songNumber)
     {
-        if (songNumber >= sizeof(SOUNDS) / sizeof(Note))
+        if (songNumber >= sizeof(RINGTONE_SOUNDS) / sizeof(Note))
             songNumber = 0;
-        this->song_nextNoteIndex = 0;
-        this->song_nextNoteTimeMs = GetMillis64();
-        this->songNumber = songNumber;
-        ESP_LOGI(TAG, "Set Song to %ld", songNumber);
+        PlayNotes(&RINGTONE_SOUNDS[songNumber][0]);
+    }
+
+    void PlayNotes(const Note* note){
+        int64_t now = GetMillis64();
+        StartBuzzer(note->freq);
+        nextNoteTimeMs = now+note->durationMs;
+        nextNote=note;
+        this->nextNote++;
     }
 
     void Loop()
     {
-        if (songNumber == 0)
+        if (nextNote == nullptr)
             return;
 
-        if (GetMillis64() < song_nextNoteTimeMs)
+        if (GetMillis64() < nextNoteTimeMs)
             return;
 
-        const Note note = SOUNDS[songNumber][song_nextNoteIndex];
-        if (note.freq == 0)
+        if (nextNote->freq == 0)
         {
-            ESP_LOGD(TAG, "Mute Note and wait %d", note.durationMs);
+            ESP_LOGD(TAG, "Mute Note and wait %d", nextNote->durationMs);
             EndBuzzer();
-            if (note.durationMs == 0)
+            if (nextNote->durationMs == 0)
             {
-                songNumber = 0;
-                song_nextNoteTimeMs = UINT64_MAX;
-                song_nextNoteIndex = 0;
+                nextNote = nullptr;
+                nextNoteTimeMs = INT64_MAX;
             }
             else
             {
-                song_nextNoteTimeMs += note.durationMs;
-                song_nextNoteIndex++;
+                nextNoteTimeMs += nextNote->durationMs;
+                nextNote++;
             }
         }
         else
         {
-            ESP_LOGD(TAG, "Set Note to Frequency %d and wait %d", note.freq, note.durationMs);
-            StartBuzzer(note.freq);
-            song_nextNoteTimeMs += note.durationMs;
-            song_nextNoteIndex++;
+            ESP_LOGD(TAG, "Set Note to Frequency %d and wait %d", nextNote->freq, nextNote->durationMs);
+            StartBuzzer(nextNote->freq);
+            nextNoteTimeMs += nextNote->durationMs;
+            nextNote++;
         }
     }
 };

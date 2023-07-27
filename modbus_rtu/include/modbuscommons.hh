@@ -1,8 +1,9 @@
 #pragma once
 #include <stddef.h>
+#include <common.hh>
 namespace modbus
 {
-    static uint16_t calcCRC(const uint8_t *data, size_t len)
+    uint16_t calcCRC(const uint8_t *data, size_t len)
     {
         // CRC16 pre-calculated tables
         const uint8_t crcHiTable[] = {
@@ -58,17 +59,17 @@ namespace modbus
         return (crcHi << 8 | crcLo);
     }
 
-    static unsigned int get_number_of_bytes(unsigned int number_of_bits)
+    unsigned int get_number_of_bytes(unsigned int number_of_bits)
     {
         return (number_of_bits + 8 - 1) / 8;
     }
 
-    static void WriteCRC(uint8_t *data, uint16_t position){
+    void WriteCRC(uint8_t *data, uint16_t position){
         uint16_t crc = calcCRC(data, position);
         WriteUInt16(crc, data, position);
     }
     
-    static bool validCRC(const uint8_t *data, size_t lenWithoutCRC, uint16_t CRC)
+    bool validCRC(const uint8_t *data, size_t lenWithoutCRC, uint16_t CRC)
     {
         uint16_t crc16 = calcCRC(data, lenWithoutCRC);
         if (CRC == crc16)
@@ -76,46 +77,12 @@ namespace modbus
         return false;
     }
 
-    static bool validCRCInLastTwoBytes(const uint8_t *data, size_t len)
+    bool validCRCInLastTwoBytes(const uint8_t *data, size_t len)
     {
         return validCRC(data, len - 2, data[len - 2] | (data[len - 1] << 8));
     }
 
-    static void WriteUInt16BigEndian(uint16_t value, uint8_t *message, uint32_t offset)
-    {
-            uint8_t *ptr1 = (uint8_t *)&value;
-            uint8_t *ptr2 = ptr1 + 1;
-            *(message + offset) = *ptr2;
-            *(message + offset + 1) = *ptr1;
-    }
 
-    static void WriteInt16BigEndian(int16_t value, uint8_t *message, uint32_t offset)
-    {
-            uint8_t *ptr1 = (uint8_t *)&value;
-            uint8_t *ptr2 = ptr1 + 1;
-            *(message + offset) = *ptr2;
-            *(message + offset + 1) = *ptr1;
-    }
-
-    static uint16_t ParseUInt16BigEndian(const uint8_t * const message, uint32_t offset)
-    {
-        uint16_t step;
-        uint8_t* ptr1=(uint8_t*)&step;
-        uint8_t* ptr2 = ptr1+1;
-        *ptr2 = *(message+offset);
-        *ptr1 = *(message+offset+1);
-        return step;
-    }
-
-    static int16_t ParseInt16BigEndian(const uint8_t * const message, uint32_t offset)
-    {
-        int16_t step;
-        uint8_t* ptr1=(uint8_t*)&step;
-        uint8_t* ptr2 = ptr1+1;
-        *ptr2 = *(message+offset);
-        *ptr1 = *(message+offset+1);
-        return step;
-    }
 
     enum class ModbusMessageParsingResult {
         MESSAGE_NOT_YET_COMPLETE=2,

@@ -20,20 +20,22 @@ esp_err_t cRotaryEncoder::Stop()
     return pcnt_unit_stop(this->pcnt_unit);
 }
 
-esp_err_t cRotaryEncoder::GetValue(int *value)
+/**
+ * Counter is in 4X mode. One complete cycle results in +-4 steps
+*/
+esp_err_t cRotaryEncoder::GetValue(int16_t &value, bool &isPressed, bool resetValueToZero)
 {
-    /*
-    int16_t tmp;
-    pcnt_get_counter_value(this->pcnt_unit, &tmp);
-    *value=tmp;
+    isPressed = gpio_get_level(sw_gpio_num)==0;
+    int local_value;
+    pcnt_unit_get_count(this->pcnt_unit, &local_value);
+    value=local_value;
+    if(resetValueToZero)pcnt_unit_clear_count(this->pcnt_unit);
     return ESP_OK;
-    */
-    return pcnt_unit_get_count(this->pcnt_unit, value);
 }
 
 
-cRotaryEncoder::cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, int16_t minCount, int16_t maxCount)
-	:pcnt_unit(nullptr), phase_a_gpio_num(phase_a_gpio_num), phase_b_gpio_num(phase_b_gpio_num), minCount(minCount), maxCount(maxCount){
+cRotaryEncoder::cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, gpio_num_t sw_gpio_num, int16_t minCount, int16_t maxCount)
+	:pcnt_unit(nullptr), phase_a_gpio_num(phase_a_gpio_num), phase_b_gpio_num(phase_b_gpio_num), sw_gpio_num(sw_gpio_num), minCount(minCount), maxCount(maxCount){
 
 }
 
@@ -41,11 +43,15 @@ esp_err_t cRotaryEncoder::Init()
 {
 	gpio_reset_pin(phase_a_gpio_num);
 	gpio_reset_pin(phase_b_gpio_num);
+    gpio_reset_pin(sw_gpio_num);
+    
 	gpio_set_direction(phase_a_gpio_num, GPIO_MODE_INPUT);
 	gpio_set_direction(phase_b_gpio_num, GPIO_MODE_INPUT);
+    gpio_set_direction(sw_gpio_num, GPIO_MODE_INPUT);
 	gpio_pullup_en(phase_a_gpio_num);
 	gpio_pullup_en(phase_b_gpio_num);
-    
+    gpio_pullup_en(sw_gpio_num);
+
     pcnt_unit_config_t unit_config{minCount, maxCount,0};
     ESP_ERROR_CHECK(pcnt_new_unit(&unit_config, &pcnt_unit));
 

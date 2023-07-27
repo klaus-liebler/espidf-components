@@ -60,12 +60,13 @@ namespace PCA9685
 			}
 		}
 		size_t bytesToWrite = (lastOutput - firstOutput + 1) * 4;
-		ESP_LOGI(TAG, "first=%d, last=%d, bytesToWrite=%i, buffer[0...5]=%04X %04X %04X %04X %04X %04X", firstOutput, lastOutput, bytesToWrite, buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5]);
+		//ESP_LOGI(TAG, "first=%d, last=%d, bytesToWrite=%i, buffer[0...5]=%04X %04X %04X %04X %04X %04X", firstOutput, lastOutput, bytesToWrite, buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5]);
 		return i2cPort->WriteReg((uint8_t)device, 0x06 + 4 * firstOutput, (uint8_t *)buffer, bytesToWrite);
 	}
 
 	ErrorCode M::SetupStatic(iI2CPort *i2cPort, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq)
 	{
+		assert(i2cPort!=nullptr);
 		RETURN_ON_ERRORCODE(i2cPort->IsAvailable((uint8_t)device));
 		RETURN_ON_ERRORCODE(SoftwareReset(i2cPort));
 		
@@ -176,7 +177,7 @@ namespace PCA9685
 	{
 		if (this->i2cPort == 0)
 		{
-			ESP_LOGE(TAG, "i2c device is null");
+			//ESP_LOGE(TAG, "i2c device is null");
 			return ErrorCode::HARDWARE_NOT_INITIALIZED;
 		}
 		// Optional: PCA9685_I2C_SlaveAtAddress(Address), might make things slower
@@ -195,7 +196,7 @@ namespace PCA9685
 	{
 		if (this->i2cPort == 0)
 		{
-			ESP_LOGE(TAG, "i2c device is null");
+			//ESP_LOGE(TAG, "i2c device is null");
 			return ErrorCode::HARDWARE_NOT_INITIALIZED;
 		}
 		uint16_t offValue;
