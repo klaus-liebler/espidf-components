@@ -25,7 +25,9 @@ esp_err_t cRotaryEncoder::Stop()
 */
 esp_err_t cRotaryEncoder::GetValue(int16_t &value, bool &isPressed, bool resetValueToZero)
 {
-    isPressed = gpio_get_level(sw_gpio_num)==0;
+    if(sw_gpio_num != GPIO_NUM_NC){
+        isPressed = gpio_get_level(sw_gpio_num)==0;
+    }
     int local_value;
     pcnt_unit_get_count(this->pcnt_unit, &local_value);
     value=local_value;
@@ -43,14 +45,17 @@ esp_err_t cRotaryEncoder::Init()
 {
 	gpio_reset_pin(phase_a_gpio_num);
 	gpio_reset_pin(phase_b_gpio_num);
-    gpio_reset_pin(sw_gpio_num);
+    
     
 	gpio_set_direction(phase_a_gpio_num, GPIO_MODE_INPUT);
 	gpio_set_direction(phase_b_gpio_num, GPIO_MODE_INPUT);
     gpio_set_direction(sw_gpio_num, GPIO_MODE_INPUT);
 	gpio_pullup_en(phase_a_gpio_num);
 	gpio_pullup_en(phase_b_gpio_num);
-    gpio_pullup_en(sw_gpio_num);
+    if(sw_gpio_num != GPIO_NUM_NC){
+        gpio_reset_pin(sw_gpio_num);
+        gpio_pullup_en(sw_gpio_num);
+    }
 
     pcnt_unit_config_t unit_config{minCount, maxCount,0};
     ESP_ERROR_CHECK(pcnt_new_unit(&unit_config, &pcnt_unit));

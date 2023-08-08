@@ -3,8 +3,6 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
-#include "tinyusb.h"
-#include "tusb_cdc_acm.h"
 #include "sdkconfig.h"
 #include "esp_timer.h"
 #include <common.hh>
@@ -21,7 +19,9 @@ namespace modbus
     {
     private:
         uint8_t slaveId;
-        void (*callback)(uint8_t, uint16_t, size_t);
+        void (*callbackAfterWrite)(uint8_t, uint16_t, size_t);
+        void (*callbackBeforeRead)(uint8_t, uint16_t, size_t);
+        
         std::vector<bool> *outputCoils;
         std::vector<bool> *inputContacts;
         std::vector<uint16_t> *inputRegisters;
@@ -39,6 +39,8 @@ namespace modbus
             uint16_t coilCount = ParseUInt16BigEndian(rx_buf, 4);
             if (coilCount==0 || (startCoil + coilCount > theBitVector->size()))
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
+            if (callbackBeforeRead)
+                callbackBeforeRead(rx_buf[1], startCoil, coilCount);
             tx_buf[0]=rx_buf[0];
             tx_buf[1]=rx_buf[1];
             uint8_t byteCount=get_number_of_bytes(coilCount);
@@ -49,6 +51,41 @@ namespace modbus
             for(int i=0;i<coilCount;i++){
                 bool bit = theBitVector->at(startCoil+i);
                 tx_buf[3+i/8]+=bit<<(i%8);
+            }
+            WriteCRC(tx_buf, 3+byteCount);
+            tx_size=3+byteCount+2;
+            rx_pos=0;
+            return ModbusMessageParsingResult::OK;
+        }
+
+         /**
+         * Read Input Registers
+        */
+        ModbusMessageParsingResult processFC03orFC04(uint8_t *tx_buf, size_t &tx_size, std::vector<uint16_t> *theRegisters)
+        {
+            if (rx_pos != 8)
+                return  SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::LENGTH_ERROR);
+            if (!validCRCInLastTwoBytes(rx_buf, rx_pos))
+                return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::CRC_ERROR);
+            uint16_t startRegister = ParseUInt16BigEndian(rx_buf, 2);
+            if (startRegister >= theRegisters->size())
+                return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
+            uint16_t registerCount = ParseUInt16BigEndian(rx_buf, 4);
+            if (registerCount==0 || (startRegister + registerCount > theRegisters->size()))
+                return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
+            if (callbackBeforeRead)
+                callbackBeforeRead(rx_buf[1], startRegister, registerCount);
+            tx_buf[0]=rx_buf[0];
+            tx_buf[1]=rx_buf[1];
+            uint8_t byteCount=2*registerCount;
+            tx_buf[2]=byteCount;
+            for(int i=0;i<byteCount;i++){
+                tx_buf[3+i]=0;
+            }
+            for(int i=0;i<registerCount;i++){
+                uint16_t value = theRegisters->at(startRegister+i);
+                tx_buf[3+2*i+0]=value>> 8;
+                tx_buf[3+2*i+1]=value & 0xFF;
             }
             WriteCRC(tx_buf, 3+byteCount);
             tx_size=3+byteCount+2;
@@ -70,8 +107,8 @@ namespace modbus
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
             uint16_t registerValue = ParseUInt16BigEndian(rx_buf, 4);
             outputCoils->at(coilIndex) = registerValue!=0;
-            if (callback)
-                callback(5, coilIndex, 1);
+            if (callbackAfterWrite)
+                callbackAfterWrite(5, coilIndex, 1);
             return SendOKMessageBack(tx_buf, tx_size);
         }
        
@@ -86,8 +123,8 @@ namespace modbus
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
             uint16_t registerValue = ParseUInt16BigEndian(rx_buf, 4);
             holdingRegisters->at(registerIndex) = registerValue;
-            if (callback)
-                callback(6, registerIndex, 1);
+            if (callbackAfterWrite)
+                callbackAfterWrite(6, registerIndex, 1);
             return SendOKMessageBack(tx_buf, tx_size);
         }
 
@@ -121,8 +158,8 @@ namespace modbus
                 bool value = GetBitInU8Buf(rx_buf, 7, i);
                 outputCoils->at(coilStart+i)=value;
             }
-            if (callback)
-                callback(15, coilStart, coilCount);
+            if (callbackAfterWrite)
+                callbackAfterWrite(15, coilStart, coilCount);
             return SendPartialCopyOKMessageWithNewCRCBack(tx_buf, tx_size, 6);
         }
         //Write Holding Registers
@@ -157,8 +194,8 @@ namespace modbus
                 uint16_t registerValue = ParseUInt16BigEndian(rx_buf, 7 + 2 * reg);
                 holdingRegisters->at(registerIndex + reg) = registerValue;
             }
-            if (callback)
-                callback(16, registerIndex, registerCount);
+            if (callbackAfterWrite)
+                callbackAfterWrite(16, registerIndex, registerCount);
             return SendPartialCopyOKMessageWithNewCRCBack(tx_buf, tx_size, 6);
         }
 
@@ -203,12 +240,14 @@ namespace modbus
         time_t rx_time=0;
         SemaphoreHandle_t xBinarySemaphore;
     public:
-        M(uint8_t slaveId, void (*callback)(uint8_t, uint16_t, size_t), std::vector<bool> *outputCoils, std::vector<bool> *inputContacts, std::vector<uint16_t> *inputRegisters, std::vector<uint16_t> *holdingRegisters)
-            : slaveId(slaveId), callback(callback), outputCoils(outputCoils), inputContacts(inputContacts), inputRegisters(inputRegisters), holdingRegisters(holdingRegisters)
+        M(uint8_t slaveId, void (*callbackAfterWrite)(uint8_t, uint16_t, size_t), void (*callbackBeforeRead)(uint8_t, uint16_t, size_t), std::vector<bool> *outputCoils, std::vector<bool> *inputContacts, std::vector<uint16_t> *inputRegisters, std::vector<uint16_t> *holdingRegisters)
+            : slaveId(slaveId), callbackAfterWrite(callbackAfterWrite), callbackBeforeRead(callbackBeforeRead), outputCoils(outputCoils), inputContacts(inputContacts), inputRegisters(inputRegisters), holdingRegisters(holdingRegisters)
         {
             xBinarySemaphore = xSemaphoreCreateBinary();
         }
-
+        /**
+         * Provides a pointer to a data buffer where to store maximal "remaining" bytes. Stores the "now" time to manage MODBUS timeouts
+        */
         void ReceiveBytesPhase1(uint8_t **rx_buf, size_t* remaining){
             time_t now=esp_timer_get_time();
             if(rx_pos!=0 && now-rx_time>TIMEOUT){
@@ -219,12 +258,14 @@ namespace modbus
             *remaining=RX_BUF_MAX_SIZE-rx_pos;
             rx_time=now;
         }
-
+        /**
+         * Tries to parse the current internal rx buffer. Fails if there are not enough received bytes of unknown fuction code or invalid CRC. Creates a proper answer
+        */
         void ReceiveBytesPhase2(size_t rx_size, uint8_t *tx_buf, size_t &tx_size_max){
             rx_pos+=rx_size;
             modbus::ModbusMessageParsingResult res = Parse(tx_buf, tx_size_max);
             if(res==modbus::ModbusMessageParsingResult::OK){
-                ESP_LOGI(MBLOG, "%d-Message parsed and processed successfully", rx_buf[1]); 
+                ESP_LOGI(MBLOG, "%d-Message parsed and processed successfully. Returned %d bytes to write back", rx_buf[1], tx_size_max); 
             }else if((int)res<0){
                 ESP_LOGW(MBLOG, "Parse returned %d", (int)res);
             }
@@ -245,6 +286,8 @@ namespace modbus
             {
             case 1:return processFC01orFC02(tx_buf, tx_size, outputCoils);
             case 2:return processFC01orFC02(tx_buf, tx_size, inputContacts);
+            case 3:return processFC03orFC04(tx_buf, tx_size, holdingRegisters);
+            case 4:return processFC03orFC04(tx_buf, tx_size, inputRegisters);
             case 5:return processFC05(tx_buf, tx_size);
             case 6:return processFC06(tx_buf, tx_size);
             case 15:return processFC15(tx_buf, tx_size);

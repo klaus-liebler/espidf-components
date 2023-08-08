@@ -13,6 +13,7 @@
 #include <esp_timer.h>
 #include <driver/gpio.h>
 #include <driver/i2s_std.h>
+#include "driver/dac_continuous.h"
 #include <codec_manager.hh>
 #include <common.hh>
 
@@ -57,21 +58,17 @@ namespace AudioPlayer
 
     constexpr AudioOrder SILENCE_ORDER{AudioType::SILENCE, nullptr, 0, 0, 0, true};
 
+
     class Player
     {
     private:
         QueueHandle_t orderQueue{nullptr};
-        CodecManager::M* codecManager{nullptr};
+        CodecManager::CodecManagerInterface* codecManager{nullptr};
         mp3dec_t *decoder;
-        i2s_chan_handle_t tx_handle{nullptr};
         int32_t frameStart{0};
         int16_t *outBuffer{nullptr};
-
         AudioOrder currentOrder;
-
-        uint8_t gainF2P6{1<<6};
-        int32_t currentSampleRateHz{0};
-        bool usesInternalDac{false};
+        
 
         static int FindSyncWordOnAnyPosition(const uint8_t *file, size_t fileLen, int offset){
             for (int i = offset; i < fileLen - 1; i++)
@@ -82,40 +79,18 @@ namespace AudioPlayer
             return -1;
         }
 
-        void SetGain(float f)
-        {
-            if (f > 4.0)
-                f = 4.0;
-            if (f < 0.0)
-                f = 0.0;
-            gainF2P6 = (uint8_t)(f * (1 << 6));
-        }
 
 
-
-        void AmplifyAndClampAndNormalizeForDAC(int16_t &s){
-            int32_t v = (s * gainF2P6) >> 6;
-            if (v > INT16_MAX)
-                s = INT16_MAX;
-            else if (v < INT16_MIN)
-                s = INT16_MIN;
-            else
-                s = v;
-            if (usesInternalDac)
-            {
-                s += 0x8000;
-            }
-        }
 
         esp_err_t LoopPCM(){
-            size_t i2s_bytes_writen;
-            ESP_ERROR_CHECK(i2s_channel_write(tx_handle, currentOrder.file, currentOrder.fileLen, &i2s_bytes_writen, portMAX_DELAY));
-            if(i2s_bytes_writen!=currentOrder.fileLen){
-                ESP_LOGE(TAG, "Not all bytes are written!!!");
-            }
+            codecManager->WriteAudioData(CodecManager::AudioFormat::Stereo_16bit, currentOrder.fileLen/4, (void*)currentOrder.file);//TODO AudioFormat!
+           
+ 
             currentOrder=SILENCE_ORDER;
             return ESP_OK;
         }
+
+
         
         esp_err_t LoopMP3(){
             if (frameStart >= currentOrder.fileLen)
@@ -130,56 +105,14 @@ namespace AudioPlayer
             this->frameStart += info.frame_bytes;
             if (samples == 0){return ESP_OK;}
 
-            if (this->currentSampleRateHz != info.hz)
-            {
-                ESP_LOGI(TAG, "Change sample rate to %d Hz", info.hz);
-                i2s_std_clk_config_t clk_cfg=I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)info.hz);
-                ESP_ERROR_CHECK(i2s_channel_disable(tx_handle));
-                ESP_ERROR_CHECK(i2s_channel_reconfig_std_clock(tx_handle, &clk_cfg));
-                ESP_ERROR_CHECK(i2s_channel_enable(tx_handle));
-                this->currentSampleRateHz = info.hz;
-            }
-            
-            if (info.channels == 1)
-            {
-                for (int i = samples - 1; i >= 0; i--)
-                {
-                    //TODO not yet optimized
-                    int16_t l = outBuffer[i];
-                    int16_t r = outBuffer[i];
-                    AmplifyAndClampAndNormalizeForDAC(l);
-                    AmplifyAndClampAndNormalizeForDAC(r);
-                    outBuffer[2 * i] = l;
-                    outBuffer[2 * i + 1] = r;
-                }
-            }
-            else if (info.channels == 2 && usesInternalDac)
-            {
-                for (size_t i = 0; i < samples * 2; i++)
-                {
-                    int32_t v = (outBuffer[i] * gainF2P6) >> 6;
-                    outBuffer[i]=clip(v, (int32_t)INT16_MIN, (int32_t)INT16_MAX);
-                    outBuffer[i] += 0x8000;
-                }
-            }
-            else if (info.channels == 2 && !usesInternalDac && codecManager==nullptr)
-            {
-                for (size_t i = 0; i < samples * 2; i++)
-                {
-                    int32_t v = (outBuffer[i] * gainF2P6) >> 6;
-                    outBuffer[i]=clip(v, (int32_t)INT16_MIN, (int32_t)INT16_MAX);
-                }
-            }
-            
-            size_t i2s_bytes_writen;
-            int i2s_bytes_to_write{samples * 4};
-            ESP_LOGD(TAG, "Writing %d bytes to i2s", i2s_bytes_to_write);
-            ESP_ERROR_CHECK(i2s_channel_write(tx_handle, outBuffer, i2s_bytes_to_write, &i2s_bytes_writen, portMAX_DELAY));
+            codecManager->SetSampleRate(info.hz);
+            CodecManager::AudioFormat format =info.channels==1?CodecManager::AudioFormat::Mono_16bit:CodecManager::AudioFormat::Stereo_16bit;
 
-            if (i2s_bytes_to_write != i2s_bytes_writen)
-            {
-                ESP_LOGE(TAG, "i2s_bytes_to_write!=i2s_bytes_writen");
-            }
+ 
+            ESP_LOGD(TAG, "ch=%d, hz=%d, samples=%d", info.channels, info.hz, samples);
+            
+            codecManager->WriteAudioData(format, samples, outBuffer);
+
             return ESP_OK;
         }
 
@@ -191,19 +124,21 @@ namespace AudioPlayer
                 return ESP_FAIL;
             }
             mp3dec_init(decoder);
-            if(codecManager) codecManager->SetPowerState(true);
+            codecManager->SetPowerState(true);
+            if(currentOrder.volume!=0){
+                codecManager->SetVolume(currentOrder.volume);
+            }
             ESP_LOGI(TAG, "Successfully initialized a new MP3 sound play task. File=%p; FileLen=%zu; FrameStart=%ld;", currentOrder.file, currentOrder.fileLen, frameStart);
             return ESP_OK;
         }
 
         esp_err_t InitPCM(){
             frameStart=0;
-            i2s_std_clk_config_t clk_cfg=I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)currentOrder.sampleRate);
-            ESP_ERROR_CHECK(i2s_channel_disable(tx_handle));
-            ESP_ERROR_CHECK(i2s_channel_reconfig_std_clock(tx_handle, &clk_cfg));
-            ESP_ERROR_CHECK(i2s_channel_enable(tx_handle));
-            this->currentSampleRateHz = currentOrder.sampleRate;
-            if(codecManager) codecManager->SetPowerState(true);
+            codecManager->SetSampleRate(currentOrder.sampleRate);
+            codecManager->SetPowerState(true);
+            if(currentOrder.volume!=0){
+                codecManager->SetVolume(currentOrder.volume);
+            }
             ESP_LOGI(TAG, "Successfully initialized a new PCM sound play task. File=%p; FileLen=%zu; SampleRate %lu", currentOrder.file, currentOrder.fileLen, currentOrder.sampleRate);
             return ESP_OK;
         }
@@ -222,28 +157,18 @@ namespace AudioPlayer
 
         esp_err_t PlayMP3(const uint8_t *file, size_t fileLen, uint8_t volume, bool cancelPrevious)
         {
-            if (tx_handle==nullptr)
-            {
-                ESP_LOGE(TAG, "AudioPlayer not initialized");
-                return ESP_FAIL;
+            if(file==nullptr || fileLen==0){
+                xQueueOverwrite(orderQueue, &SILENCE_ORDER);
+                return ESP_OK;
             }
             AudioOrder ao{AudioType::MP3, file, fileLen, 0, volume, cancelPrevious};
             xQueueOverwrite(orderQueue, &ao);
             return ESP_OK;
         }
 
-        void SetGainU8(uint8_t f)
-        {
-            gainF2P6 = f;
-        }
-
         esp_err_t PlayPCM(const uint8_t *file, size_t fileLen, uint32_t sampleRate, uint8_t volume,  bool cancelPrevious)
         {
-            if (tx_handle==nullptr)
-            {
-                ESP_LOGE(TAG, "AudioPlayer not initialized");
-                return ESP_FAIL;
-            }
+
             AudioOrder ao{AudioType::PCM, file, fileLen, sampleRate, volume, cancelPrevious};
             xQueueOverwrite(orderQueue, &ao);
             return ESP_OK;
@@ -277,12 +202,6 @@ namespace AudioPlayer
                             InitSilence();
                             break;
                     }
-                    if(codecManager){
-                        codecManager->SetVolume(currentOrder.volume);
-                    }
-                    else{
-                        this->gainF2P6=currentOrder.volume;
-                    }
                 }
             }
 
@@ -300,72 +219,18 @@ namespace AudioPlayer
             }
         }
 
-        Player()
+        ErrorCode Init(){
+            return codecManager->Init();
+        }
+
+        Player(CodecManager::CodecManagerInterface* codecManager)
         {
             this->outBuffer = new int16_t[2 * MP3::SAMPLES_PER_FRAME];
             this->decoder = new mp3dec_t();
             this->orderQueue = xQueueCreate(1,sizeof(AudioOrder));
-            mp3dec_init(decoder);
-            SetGain(1.0);
-        }
-
-        esp_err_t InitExternalI2SDAC(gpio_num_t bck, gpio_num_t ws, gpio_num_t data, gpio_num_t mclk, CodecManager::M* codecManager=nullptr)
-        {
-            ESP_LOGI(TAG, "Initializing AudioPlayer for external I2S DAC");
             this->codecManager=codecManager;
-            i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
-            chan_cfg.auto_clear = true; // Auto clear the legacy data in the DMA buffer
-            ESP_ERROR_CHECK(i2s_new_channel(&chan_cfg, &tx_handle, nullptr));
-            i2s_std_config_t std_cfg = {
-                .clk_cfg = I2S_STD_CLK_DEFAULT_CONFIG(44100),
-                .slot_cfg = I2S_STD_PHILIPS_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_16BIT, I2S_SLOT_MODE_STEREO),
-                .gpio_cfg = {
-                    .mclk = mclk,
-                    .bclk = bck,
-                    .ws = ws,
-                    .dout = data,
-                    .din = GPIO_NUM_NC,
-                    .invert_flags = {
-                        .mclk_inv = false,
-                        .bclk_inv = false,
-                        .ws_inv = false,
-                    },
-                },
-            };
-            ESP_ERROR_CHECK(i2s_channel_init_std_mode(tx_handle, &std_cfg));
-            ESP_ERROR_CHECK(i2s_channel_enable(tx_handle));
-            return ESP_OK;
+            mp3dec_init(decoder);
         }
-
-#ifdef USE_OLD_I2S_API
-        esp_err_t InitInternalDACMonoRightPin25()
-        {
-            ESP_LOGI(TAG, "Initializing I2S_NUM_0 for internal DAC");
-            this->output = Output::UNINITIALIZED;
-            i2s_port_t i2s_num = I2S_NUM_0; // only I2S_NUM_0 has access to internal DAC!!!
-            i2s_config_t i2s_config = {};
-            i2s_config.mode = (i2s_mode_t)(I2S_MODE_MASTER | I2S_MODE_TX | I2S_MODE_DAC_BUILT_IN); // see https://github.com/earlephilhower/ESP8266Audio/blob/master/src/AudioOutputI2S.cpp
-            i2s_config.sample_rate = 44100;
-            i2s_config.bits_per_sample = I2S_BITS_PER_SAMPLE_16BIT;
-            i2s_config.channel_format = I2S_CHANNEL_FMT_RIGHT_LEFT;
-
-            i2s_config.communication_format = (i2s_comm_format_t)I2S_COMM_FORMAT_STAND_MSB;
-            i2s_config.dma_desc_num = 8;
-            i2s_config.dma_frame_num = 64; // MP3::SAMPLES_PER_FRAME/2; //Max 1024
-
-            i2s_config.intr_alloc_flags = 0;
-            i2s_config.use_apll = false;
-            i2s_config.fixed_mclk = 0;
-            i2s_config.tx_desc_auto_clear = false; // Auto clear tx descriptor on underflow
-
-            ESP_ERROR_CHECK(i2s_driver_install(i2s_num, &i2s_config, 0, nullptr));
-            ESP_ERROR_CHECK(i2s_set_pin(i2s_num, nullptr));
-            ESP_ERROR_CHECK(i2s_set_dac_mode(I2S_DAC_CHANNEL_RIGHT_EN));
-            ESP_ERROR_CHECK(i2s_set_sample_rates(i2s_num, 24000));
-            this->output = Output::INTERNAL_DAC;
-            return ESP_OK;
-        }
-#endif
     };
 
 }
