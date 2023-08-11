@@ -54,7 +54,6 @@ namespace modbus
             }
             WriteCRC(tx_buf, 3+byteCount);
             tx_size=3+byteCount+2;
-            rx_pos=0;
             return ModbusMessageParsingResult::OK;
         }
 
@@ -89,7 +88,6 @@ namespace modbus
             }
             WriteCRC(tx_buf, 3+byteCount);
             tx_size=3+byteCount+2;
-            rx_pos=0;
             return ModbusMessageParsingResult::OK;
         }
 
@@ -110,6 +108,18 @@ namespace modbus
             if (callbackAfterWrite)
                 callbackAfterWrite(5, coilIndex, 1);
             return SendOKMessageBack(tx_buf, tx_size);
+        }
+        /**
+         * Caller has to free the returned pointer after usage!
+        */
+        char* bytebuf2hex(uint8_t *buf, size_t len){
+            int outstrlen = 2*len;
+            char * outstr = (char*)malloc(outstrlen + 1);
+            char * p = outstr;
+            for (size_t i = 0; i < len; i++) {
+                p += sprintf(p, "%02x", buf[i]);
+            }
+            return outstr;
         }
        
         ModbusMessageParsingResult processFC06(uint8_t *tx_buf, size_t &tx_size)
@@ -208,7 +218,6 @@ namespace modbus
             }
             WriteCRC(tx_buf, rx_pos - 2);
             tx_size = rx_pos;
-            rx_pos=0;
             return reason;
         }
         ModbusMessageParsingResult SendOKMessageBack(uint8_t *tx_buf, size_t &tx_size)
@@ -218,7 +227,6 @@ namespace modbus
                 tx_buf[i] = rx_buf[i];
             }
             tx_size = rx_pos;
-            rx_pos=0;
             return ModbusMessageParsingResult::OK;
         }
 
@@ -230,7 +238,6 @@ namespace modbus
             }
             WriteCRC(tx_buf, size);
             tx_size = size+2;
-            rx_pos=0;
             return ModbusMessageParsingResult::OK;
         }
 
@@ -265,12 +272,26 @@ namespace modbus
             rx_pos+=rx_size;
             modbus::ModbusMessageParsingResult res = Parse(tx_buf, tx_size_max);
             if(res==modbus::ModbusMessageParsingResult::OK){
-                ESP_LOGI(MBLOG, "%d-Message parsed and processed successfully. Returned %d bytes to write back", rx_buf[1], tx_size_max); 
+                char *instr = bytebuf2hex(rx_buf, rx_pos);
+                char * outstr = bytebuf2hex(tx_buf, tx_size_max);
+                ESP_LOGI(MBLOG, "%d-Message %s parsed and processed successfully. Returned Message 0x%s", rx_buf[1], instr, outstr);
+                free(outstr);
+                free(instr);
+                rx_pos=0;
             }else if((int)res<0){
-                ESP_LOGW(MBLOG, "Parse returned %d", (int)res);
+                char *instr = bytebuf2hex(rx_buf, rx_pos);
+                ESP_LOGW(MBLOG, "Message %s could not be parsed successfully Parse returned %d", instr, (int)res);
+                free(instr);
+                rx_pos=0;
             }
-            else{//>0
-                ESP_LOGI(MBLOG, "Parse returned %d", (int)res); 
+            else if(res== ModbusMessageParsingResult::MESSAGE_NOT_YET_COMPLETE){
+                ESP_LOGD(MBLOG, "MESSAGE_NOT_YET_COMPLETE");
+            }
+            else if(res == ModbusMessageParsingResult::REQUEST_NOT_FOR_ME){
+                ESP_LOGI(MBLOG, "REQUEST_NOT_FOR_ME");
+            }
+            else{
+                ESP_LOGE(MBLOG, "Parse returned %d", (int)res); 
             }
         }
 
