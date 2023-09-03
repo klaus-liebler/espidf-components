@@ -2,6 +2,7 @@
 
 #include <string.h>
 #include <common.hh>
+#include <common-esp32.hh>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/queue.h>
@@ -398,7 +399,7 @@ namespace WIFIMGR
                 xTimerStart(wifi_manager_shutdown_ap_timer, portMAX_DELAY);
             }
             xSemaphoreGive(wifi_manager_mutex);
-            sntp_init();
+            esp_sntp_init();
             break;
         }
         /* This event arises when the IPV4 address become invalid.
@@ -702,9 +703,9 @@ namespace WIFIMGR
         initWifi(resetStoredWifiConnection);
 
         // prepare simple network time protocol client and start it, when we got an IP-Adress (see event handler)
-        sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
         sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
-        sntp_setservername(0, "pool.ntp.org");
+        esp_sntp_setservername(0, "pool.ntp.org");
         sntp_set_time_sync_notification_cb(time_sync_notification_cb);
         // Set timezone to Berlin
         setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);

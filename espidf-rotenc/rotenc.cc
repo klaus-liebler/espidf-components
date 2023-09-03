@@ -46,13 +46,13 @@ esp_err_t cRotaryEncoder::Init()
 	gpio_reset_pin(phase_a_gpio_num);
 	gpio_reset_pin(phase_b_gpio_num);
     
-    
 	gpio_set_direction(phase_a_gpio_num, GPIO_MODE_INPUT);
 	gpio_set_direction(phase_b_gpio_num, GPIO_MODE_INPUT);
-    gpio_set_direction(sw_gpio_num, GPIO_MODE_INPUT);
+    
 	gpio_pullup_en(phase_a_gpio_num);
 	gpio_pullup_en(phase_b_gpio_num);
     if(sw_gpio_num != GPIO_NUM_NC){
+        gpio_set_direction(sw_gpio_num, GPIO_MODE_INPUT);
         gpio_reset_pin(sw_gpio_num);
         gpio_pullup_en(sw_gpio_num);
     }

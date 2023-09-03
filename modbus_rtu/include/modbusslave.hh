@@ -274,7 +274,7 @@ namespace modbus
             if(res==modbus::ModbusMessageParsingResult::OK){
                 char *instr = bytebuf2hex(rx_buf, rx_pos);
                 char * outstr = bytebuf2hex(tx_buf, tx_size_max);
-                ESP_LOGI(MBLOG, "%d-Message %s parsed and processed successfully. Returned Message 0x%s", rx_buf[1], instr, outstr);
+                ESP_LOGD(MBLOG, "%d-Message %s parsed and processed successfully. Returned Message 0x%s", rx_buf[1], instr, outstr);
                 free(outstr);
                 free(instr);
                 rx_pos=0;
@@ -288,7 +288,7 @@ namespace modbus
                 ESP_LOGD(MBLOG, "MESSAGE_NOT_YET_COMPLETE");
             }
             else if(res == ModbusMessageParsingResult::REQUEST_NOT_FOR_ME){
-                ESP_LOGI(MBLOG, "REQUEST_NOT_FOR_ME");
+                ESP_LOGD(MBLOG, "REQUEST_NOT_FOR_ME");
             }
             else{
                 ESP_LOGE(MBLOG, "Parse returned %d", (int)res); 
