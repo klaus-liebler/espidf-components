@@ -23,12 +23,12 @@ class I2CSensor{
         int64_t nextAction{0};
         I2CSensor::STATE state{STATE::INITIAL};
     protected:
-        i2c_port_t i2c_num;
+        iI2CPort*  i2c_port;
         uint8_t address_7bit;
-        I2CSensor(i2c_port_t i2c_num, uint8_t address_7bit):i2c_num(i2c_num), address_7bit(address_7bit){}
-        virtual esp_err_t Trigger(int64_t& waitTillReadout)=0;
-        virtual esp_err_t Readout(int64_t& waitTillNExtTrigger)=0;
-        virtual esp_err_t Initialize(int64_t& waitTillFirstTrigger)=0;
+        I2CSensor(iI2CPort*  i2c_port, uint8_t address_7bit):i2c_port(i2c_port), address_7bit(address_7bit){}
+        virtual ErrorCode Trigger(int64_t& waitTillReadout)=0;
+        virtual ErrorCode Readout(int64_t& waitTillNExtTrigger)=0;
+        virtual ErrorCode Initialize(int64_t& waitTillFirstTrigger)=0;
         void ReInit(){
             this->state=STATE::FOUND;
         }
@@ -41,12 +41,12 @@ class I2CSensor{
 
     ErrorCode Loop(int64_t currentMs){
         if(currentMs<nextAction) return ErrorCode::OK;
-        esp_err_t e;
+        ErrorCode e;
         int64_t wait{0};
         switch (state)
         {
         case STATE::INITIAL:
-            if(ESP_OK!= I2C::IsAvailable(i2c_num, address_7bit)){
+            if(ErrorCode::OK!= i2c_port->IsAvailable(address_7bit)){
                 state = STATE::ERROR_NOT_FOUND;
                 ESP_LOGD(TAG, "state = STATE::ERROR_NOT_FOUND; return ErrorCode::DEVICE_NOT_RESPONDING");
                 return ErrorCode::DEVICE_NOT_RESPONDING;
@@ -55,7 +55,7 @@ class I2CSensor{
             break;
         case STATE::FOUND:
             e=Initialize(wait);
-            if(e!=ESP_OK){
+            if(e!=ErrorCode::OK){
                 state = STATE::ERROR_COMMUNICATION;
                 ESP_LOGD(TAG, "state = STATE::ERROR_COMMUNICATION; return ErrorCode::DEVICE_NOT_RESPONDING");
                 return ErrorCode::DEVICE_NOT_RESPONDING;
@@ -66,7 +66,7 @@ class I2CSensor{
         case STATE::INITIALIZED:
         case STATE::READOUT:
             e=Trigger(wait);
-            if(e!=ESP_OK){
+            if(e!=ErrorCode::OK){
                 state = STATE::ERROR_COMMUNICATION;
                 ESP_LOGE(TAG, "state = STATE::ERROR_COMMUNICATION;; return ErrorCode::DEVICE_NOT_RESPONDING");
                 return ErrorCode::DEVICE_NOT_RESPONDING;
@@ -78,7 +78,7 @@ class I2CSensor{
         case STATE::TRIGGERED:
         case STATE::RETRIGGERED:
             e=Readout(wait);
-            if(e!=ESP_OK){
+            if(e!=ErrorCode::OK){
                 state = STATE::ERROR_COMMUNICATION;
                 return ErrorCode::DEVICE_NOT_RESPONDING;
             }
