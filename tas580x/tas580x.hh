@@ -98,12 +98,17 @@ namespace TAS580x
 		constexpr uint8_t SELECT_BOOK = 0x7F;
 	}
 
-	class M:public CodecManager::M
+	class M:public CodecManager::I2sWithHardwareVolume
 	{
 	private:
 		iI2CPort *i2c_port;
 		TAS580x::ADDR7bit addr;
 		gpio_num_t power_down;
+		gpio_num_t mclk;
+		gpio_num_t bck;
+		gpio_num_t ws;
+		gpio_num_t data;
+		uint8_t initialVolume=50;
 		
 		ErrorCode transmitRegisters(const CFG::tas5805m_cfg_reg_t *conf_buf, int size)
 		{
@@ -139,7 +144,16 @@ namespace TAS580x
 		}
 
 	public:
-		M(iI2CPort *i2c_port, TAS580x::ADDR7bit addr, gpio_num_t power_down) : i2c_port(i2c_port), addr(addr), power_down(power_down)
+		M(
+			iI2CPort *i2c_port, 
+			TAS580x::ADDR7bit addr, 
+			gpio_num_t power_down,
+			gpio_num_t mclk,
+			gpio_num_t bck, 
+			gpio_num_t ws, 
+			gpio_num_t data,
+			uint8_t initialVolume=50
+			) : i2c_port(i2c_port), addr(addr), power_down(power_down), mclk(mclk), bck(bck), ws(ws), data(data), initialVolume(initialVolume)
 		{
 		}
 		
@@ -201,8 +215,11 @@ namespace TAS580x
 			return i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, reg);
 		}
 
-		ErrorCode Init(uint8_t initialVolume = 50)
+		ErrorCode Init()
 		{
+			ESP_LOGI(TAG, "Setup I2S");
+			RETURN_ON_ERRORCODE(this->InitI2sEsp32(mclk, bck, ws, data));
+
 			ESP_LOGI(TAG, "Setup of the TAS580x begins");
 			gpio_set_level(power_down, 0);
 			gpio_reset_pin(power_down);
