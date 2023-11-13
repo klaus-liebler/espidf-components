@@ -14,12 +14,12 @@ namespace AHT
  class M:public I2CSensor
   {
   public:                                                                              
-    M(i2c_port_t i2c_num, AHT::ADDRESS slaveaddr = AHT::ADDRESS::default_address); 
-    esp_err_t Initialize(int64_t& waitTillFirstTrigger) override;                                                                                                       
-    esp_err_t Trigger(int64_t& waitTillReadout) override;
-    esp_err_t Readout(int64_t& waitTillNExtTrigger)override;
-    esp_err_t Read(float &humidity, float &temperatur);
-    esp_err_t Reset();
+    M(iI2CPort* i2c_port, AHT::ADDRESS slaveaddr = AHT::ADDRESS::default_address); 
+    ErrorCode Initialize(int64_t& waitTillFirstTrigger) override;                                                                                                       
+    ErrorCode Trigger(int64_t& waitTillReadout) override;
+    ErrorCode Readout(int64_t& waitTillNExtTrigger)override;
+    ErrorCode Read(float &humidity, float &temperatur);
+    ErrorCode Reset();
   private:
     uint32_t temp{0};
     uint32_t humid{0};
