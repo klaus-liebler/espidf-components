@@ -45,11 +45,11 @@ namespace CCS811
   class M:public I2CSensor
   {
   public:                                                                                                                              // Main interface
-    M(i2c_port_t i2c_num, CCS811::ADDRESS slaveaddr = CCS811::ADDRESS::ADDR0, CCS811::MODE mode=CCS811::MODE::_1SEC, gpio_num_t nwake = (gpio_num_t)GPIO_NUM_NC); // Pin number connected to nWAKE (nWAKE can also be bound to GND, then pass -1), slave address (5A or 5B)
-    esp_err_t Initialize(int64_t& waitTillFirstTrigger) override;                                                                                                        // Reset the CCS811, switch to app mode and check HW_ID. Returns false on problems.
-    esp_err_t Trigger(int64_t& waitTillReadout) override {waitTillReadout=1000; return ESP_OK;}
-    esp_err_t Readout(int64_t& waitTillNExtTrigger)override;
-    esp_err_t Read(uint16_t *eco2, uint16_t *etvoc, uint16_t *errstat, uint16_t *raw);
+    M(iI2CPort* i2c_port, CCS811::ADDRESS slaveaddr = CCS811::ADDRESS::ADDR0, CCS811::MODE mode=CCS811::MODE::_1SEC, gpio_num_t nwake = (gpio_num_t)GPIO_NUM_NC); // Pin number connected to nWAKE (nWAKE can also be bound to GND, then pass -1), slave address (5A or 5B)
+    ErrorCode Initialize(int64_t& waitTillFirstTrigger) override;                                                                                                        // Reset the CCS811, switch to app mode and check HW_ID. Returns false on problems.
+    ErrorCode Trigger(int64_t& waitTillReadout) override {waitTillReadout=1000; return ErrorCode::OK;}
+    ErrorCode Readout(int64_t& waitTillNExtTrigger)override;
+    ErrorCode Read(uint16_t *eco2, uint16_t *etvoc, uint16_t *errstat, uint16_t *raw);
     uint16_t Get_eCO2(){return this->eco2;}
     uint16_t Get_eTVOC(){return this->etvoc;}
     const char *errstat_str(uint16_t errstat);                                                                                         // Returns a string version of an errstat. Note, each call, this string is updated.                                                                                                      // Extra interface

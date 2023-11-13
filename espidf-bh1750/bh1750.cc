@@ -11,7 +11,7 @@ esp_err_t BH1750::Init(BH1750_OPERATIONMODE operation)
     return I2C::Write(i2c_num, (uint8_t)adress, &op, 1);
 
 }
-esp_err_t BH1750::Read(float *lux){
+esp_err_t BH1750::Read(uint16_t *lux){
     uint8_t sensor_data_h, sensor_data_l;
     esp_err_t ret;
     i2c_cmd_handle_t cmd = i2c_cmd_link_create();
@@ -23,7 +23,7 @@ esp_err_t BH1750::Read(float *lux){
     ret = i2c_master_cmd_begin(i2c_num, cmd, pdMS_TO_TICKS(1000));
     i2c_cmd_link_delete(cmd);
 
-    float val = (float)((sensor_data_h << 8 | sensor_data_l) / 1.2);
+    uint16_t val = ((sensor_data_h << 8 | sensor_data_l) / 1.2);
     *lux=val;
     return ret;
 }

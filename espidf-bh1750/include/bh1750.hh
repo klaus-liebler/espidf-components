@@ -33,5 +33,5 @@ public:
     BH1750(const i2c_port_t i2c_num, BH1750_ADRESS adress);
     ~BH1750();
     esp_err_t Init(BH1750_OPERATIONMODE operation);
-    esp_err_t Read(float *lux);
+    esp_err_t Read(uint16_t *lux);
 };

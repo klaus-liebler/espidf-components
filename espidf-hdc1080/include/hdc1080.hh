@@ -42,7 +42,7 @@ namespace hdc1080{
     
     class M:public I2CSensor{
         public:
-            M(i2c_port_t i2c_num):I2CSensor(i2c_num, I2C_ADDRESS){}
+            M(iI2CPort* i2c_port):I2CSensor(i2c_port, I2C_ADDRESS){}
             ErrorCode Reconfigure(TEMPRESOLUTION tempRes, HUMRESOLUTION humRes, HEATER heater){
                 this->tempRes=tempRes;
                 this->humRes=humRes;
@@ -65,34 +65,30 @@ namespace hdc1080{
            float h{0.0};
         protected:
         
-        esp_err_t Initialize(int64_t& wait) override{
+        ErrorCode Initialize(int64_t& wait) override{
             ConfigRegister config;
-            I2C::ReadReg(i2c_num, I2C_ADDRESS, CONFIG_OFFSET, &config.rawData, 1);
+            i2c_port->ReadReg(I2C_ADDRESS, CONFIG_OFFSET, &config.rawData, 1);
             config.HumidityMeasurementResolution= (uint8_t)humRes;
             config.TemperatureMeasurementResolution= (uint8_t)tempRes;
             config.Heater= (uint8_t)heater;
             uint8_t dummy[2] = {config.rawData, 0x00};
-            return I2C::WriteReg(i2c_num, I2C_ADDRESS, CONFIG_OFFSET, dummy, 2);
+            return i2c_port->WriteReg(address_7bit, CONFIG_OFFSET, dummy, 2);
         }
-        esp_err_t Trigger(int64_t& wait) override{
+        ErrorCode Trigger(int64_t& wait) override{
             wait=100;
             uint8_t data = TEMPERATURE_OFFSET;
-            return I2C::Write(i2c_num, I2C_ADDRESS, &data, 1);
+            return i2c_port->Write(address_7bit, &data, 1);
         }
 
-        esp_err_t Readout(int64_t& wait) override{
+        ErrorCode Readout(int64_t& wait) override{
             wait=100;
             uint16_t rawT{0};
-            if(ESP_OK!=I2C::ReadReg(i2c_num, I2C_ADDRESS, TEMPERATURE_OFFSET, (uint8_t*)&rawT, 2)){
-                return ESP_FAIL;
-            }
+            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address_7bit, TEMPERATURE_OFFSET, (uint8_t*)&rawT, 2));
 	        t= (rawT / pow(2, 16)) * 165.0 - 40.0;
             uint16_t rawH{0};
-            if(ESP_OK!=I2C::ReadReg(i2c_num, I2C_ADDRESS, HUMIDITY_OFFSET, (uint8_t*)&rawH, 2)){
-                return ESP_FAIL;
-            }
+            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address_7bit, HUMIDITY_OFFSET, (uint8_t*)&rawH, 2));
 	        h = (rawH / pow(2, 16)) * 100.0;
-            return ESP_OK;
+            return ErrorCode::OK;
         }
     };
 
