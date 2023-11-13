@@ -10,8 +10,8 @@
 #include <esp_sntp.h>
 #include <ctime>
 
-#define TAG "WIFI_ETH"
-namespace WIFI_ETH
+#define TAG "ETH"
+namespace ETHERNET
 {
     esp_netif_t *eth_netif{nullptr};
     
@@ -81,7 +81,7 @@ namespace WIFI_ETH
         ESP_LOGI(TAG, "Notification of a time synchronization. The current date/time in Berlin is: %s", strftime_buf);
     }
 
-    void initETH_W5500(bool already_called_netif_init_and_event_loop, spi_host_device_t spiHost, gpio_num_t miso, gpio_num_t mosi, gpio_num_t sclk, uint32_t SPI_MASTER_FREQ_X, gpio_num_t cs, gpio_num_t reset, gpio_num_t irq, uint32_t phyAddress, int intr_flags, const char* hostname="ESP32HOST")
+    void initETH_W5500(bool already_called_netif_init_and_event_loop, spi_host_device_t spiHost, gpio_num_t miso, gpio_num_t mosi, gpio_num_t sclk, uint32_t SPI_MASTER_FREQ_X, gpio_num_t cs, gpio_num_t reset, gpio_num_t irq, uint32_t phyAddress, int intr_flags, const char* hostname)
     {
         if (!already_called_netif_init_and_event_loop)
         {
