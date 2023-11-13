@@ -66,7 +66,7 @@ export class $
         return parseInt(colorString.substring(1), 16);
     }
 
-    public static Html(parent: Element, type:string,  attributes:string[], classes?: string[], textContent?:string):HTMLElement {
+    public static Html(parent: Element, type:string,  attributes:string[]=[], classes: string[]=[], textContent:string=""):HTMLElement {
         return parent.appendChild(<HTMLElement>$.Elem(HTMLNS, type, attributes, classes, textContent));
     }
 
@@ -86,10 +86,11 @@ export class $
                 element.classList.add(clazz);
             }
         }
-        let i:number;
-        for(i=0;i<attributes.length;i+=2)
-        {
-            element.setAttribute(attributes[i], attributes[i+1]);
+        if(attributes){
+            for(let i=0;i<attributes.length;i+=2)
+            {
+                element.setAttribute(attributes[i], attributes[i+1]);
+            }
         }
         if(textContent)
         {

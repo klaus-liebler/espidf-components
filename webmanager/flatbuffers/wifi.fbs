@@ -1,0 +1,58 @@
+namespace webmanager;
+enum UpdateReasonCode:byte
+{
+    NO_CHANGE = 0,
+    CONNECTION_ESTABLISHED = 1,
+    FAILED_ATTEMPT = 2,
+    USER_DISCONNECT = 3,
+    LOST_CONNECTION = 4
+}
+
+table AccessPoint{
+    ssid:string;
+    primary_channel:int;
+    rssi:int;
+    auth_mode:int;
+}
+
+table RequestWifiAccesspoints{
+
+}
+
+table ResponseWifiAccesspoints{
+    hostname:string;
+    ssid_ap:string; 
+    accesspoints:[AccessPoint];
+}
+
+table RequestWifiConnect{
+    ssid:string;
+    password:string;
+}
+
+table ResponseWifiConnectSuccessful{
+    ssid:string;
+    rssi:string;
+    ip:Ip4;
+    netmask:Ip4;
+    gateway:Ip4;
+}
+
+table ResponseWifiConnectFailed{
+    ssid:string;
+}
+
+struct Ip4 {
+    v:[uint8:4];
+}
+
+table RequestWifiDisconnect{
+
+}
+
+table ResponseWifiDisconnect{
+
+}
+
+
+

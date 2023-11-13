@@ -1,8 +1,0 @@
-{
-    "compilerOptions": {
-      "rootDir": "./src", 
-      "noImplicitAny": true,
-      "target": "ES6",
-      "moduleResolution": "nodenext"
-    }
-  }

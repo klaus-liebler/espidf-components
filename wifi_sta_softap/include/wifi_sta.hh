@@ -57,7 +57,7 @@ namespace WIFISTA
                 ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
                 ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP: ip=" IPSTR " netmask=" IPSTR " gw=" IPSTR, IP2STR(&event->ip_info.ip), IP2STR(&event->ip_info.netmask), IP2STR(&event->ip_info.gw));
                 state=ConnectionState::CONNECTED;
-                sntp_init();
+                esp_sntp_init();
                 break;
             }
             
@@ -114,9 +114,9 @@ namespace WIFISTA
         ESP_ERROR_CHECK(esp_wifi_start());
 
         // prepare simple network time protocol client and start it, when we got an IP-Adress (see event handler)
-        sntp_setoperatingmode(SNTP_OPMODE_POLL);
+        esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
         sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
-        sntp_setservername(0, "pool.ntp.org");
+        esp_sntp_setservername(0, "pool.ntp.org");
         sntp_set_time_sync_notification_cb(time_sync_notification_cb);
         // Set timezone to Berlin
         setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
