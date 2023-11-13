@@ -3,7 +3,12 @@
 #include <driver/gpio.h>
 #include <nvs_flash.h>
 #include <esp_check.h>
+#include <esp_timer.h>
 #include "common-esp32.hh"
+
+int64_t millis(){
+	return esp_timer_get_time() / 1000;
+}
 
 constexpr int64_t ms2ticks(int64_t ms)
 {

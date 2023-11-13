@@ -124,6 +124,7 @@ esp_err_t nvs_flash_init_and_erase_lazily();
 constexpr int64_t ms2ticks(int64_t ms);
 void delayAtLeastMs(int64_t ms);
 void delayMs(int64_t ms);
+int64_t millis();
 esp_err_t ConfigGpioInput(gpio_num_t gpio, gpio_pull_mode_t pullMode);
 esp_err_t ConfigGpioOutputOD(gpio_num_t gpio, bool pullup);
 esp_err_t ConfigGpioOutputPP(gpio_num_t gpio);
