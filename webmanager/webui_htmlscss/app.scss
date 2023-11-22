@@ -1,6 +1,8 @@
 @import url("https://fonts.googleapis.com/css?family=Dosis:400,700");
 @import "./dialog.scss";
 @import "./loader.scss";
+@import "./usersettings.scss";
+@import "./../webui_logic/chartist/styles/index.scss";
 
 :root {
   --main-white-color: #f2f2f2;
@@ -199,14 +201,14 @@ p {
 }
 
 .gr {
-  color: green;
+  background-color: green;
 }
 .rd {
-  color: red;
+  background-color: red;
 }
 
 .ye{
-  color:orange;
+  background-color:orange;
 }
 
 .buttons {

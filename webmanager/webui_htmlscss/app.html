@@ -24,7 +24,51 @@
             </path>
         </svg>
     </template>
-    
+
+    <template id="Accordion">
+        <div class="accordion">
+            <button style="display: flex; "><span style="flex-grow: 1;"></span><input type="button" value="💾 Save Changes" /><input type="button" value=" ⟳ Fetch Values from Server" /><input type="button" value=" 🗑 Reset Values" /></button>
+            <div>
+                <table>
+                    <thead>
+                        <tr><th>Name</th><th></th><th style='width: 100%;'>Value</th></tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+                
+            </div>
+
+        </div>
+    </template>
+    <template id="StringItem">
+        <tr>
+            <td style='width:1%; white-space:nowrap'><label></label></td>
+            <td style='width:1%; white-space:nowrap'><input type="button" value="🗑" /></td>
+            <td><input style='width:100%; max-width: 200px;' type="text" /></td>
+        </tr>
+    </template>
+    <template id="IntegerItem">
+        <tr>
+            <td style='width:1%; white-space:nowrap'><label></label></td>
+            <td style='width:1%; white-space:nowrap'><input type="button" value="🗑" /></td>
+            <td><input type="number" /></td>
+        </tr>
+    </template>
+    <template id="BooleanItem">
+        <tr>
+            <td style='width:1%; white-space:nowrap'><label></label></td>
+            <td style='width:1%; white-space:nowrap'><input type="button" value="🗑" /></td>
+            <td><input type="checkbox" style="width: auto;" /></td>
+        </tr>
+    </template>
+    <template id="EnumItem">
+        <tr>
+            <td style='width:1%; white-space:nowrap'><label></label></td>
+            <td style='width:1%; white-space:nowrap'><input type="button" value="🗑" /></td>
+            <td><select /></td>
+        </tr>
+    </template>
+
     <dialog>
         <header>
             <span>Überschrift</span>
@@ -35,9 +79,9 @@
             <section id="dialog-right"></section>
         </main>
         <footer>
-          <button id="dialog-button" type="button">OK</button>
+            <button id="dialog-button" type="button">OK</button>
         </footer>
-      </dialog>
+    </dialog>
     <header>
         <h1>WebManager</h1>
     </header>
@@ -52,6 +96,7 @@
         </ul>
     </nav>
     <main data-nav="home">
+        <div><input id="btnUpdateJournal" type="button" value=" ⟳ Update" /></div>
         <table>
             <thead>
                 <tr>
@@ -64,6 +109,9 @@
             </thead>
             <tbody id="tblLogs"></tbody>
         </table>
+    </main>
+    <main data-nav="usersettings">
+        <h1>User Settings</h1>
     </main>
     <main data-nav="systemsettings">
         <h1>Application Partitions</h1>
@@ -93,15 +141,41 @@
             </thead>
             <tbody id="tblParameters"></tbody>
         </table>
-        <h1>OTA</h1>
-        <div><label for="otafile">Firmware file:</label> <input type="file" id="inpOtafile" name="otafile"
-                accept=".bin">
-        </div>
-        <div><input id="btnUpload" type="button" value="Do OTA" /></div>
-        <div><label id="lblProgress" for="prgbProgress">Uploading Firmware</label><progress id="prgbProgress" value="0"
-                max="100">0</progress></div>
+        <h1>Chartist Example (for later use)</h1>
+        <div id="chartist_example"></div>
+          
         <h1 class="dangerous">Dangerous Zone</h1>
-        <div><input id="btnRestart" type="button" value="Restart" /></div>
+        <h2>Over-the-air Firmware Update</h2>
+        <table>
+            <tbody>
+                <tr>
+                    <td>1.) Choose Firmware File</td>
+                    <td><input type="file" id="inpOtafile" name="otafile" accept=".bin"></td>
+                </tr>
+                <tr>
+                    <td>2.) Click!</td>
+                    <td><input id="btnUpload" type="button" value="Start Over The Air Firmware Update" /></td>
+                </tr>
+                <tr>
+                    <td>3.) See Progress</td>
+                    <td><progress id="prgbProgress" value="0" max="100">0</progress></td>
+                </tr>
+                <tr>
+                    <td>4.) Wait</td>
+                    <td>After Upload, the CPU is reset automatically. You have to reconnect after an appropriate waiting time</td>
+                </tr>
+
+            </tbody>
+        </table>
+        <h2>Reset CPU</h2>
+        <table>
+            <tbody>
+                <tr>
+                    <td>Click to Reset/Restart CPU</td>
+                    <td><input id="btnRestart" type="button" value="Restart" /></td>
+                </tr>
+            </tbody>
+        </table>
     </main>
     <main data-nav="wifimanager">
         <h1>Current Connection</h1>
@@ -125,7 +199,7 @@
                 </tr>
 
             </tbody>
-            
+
         </table>
 
         <h1>Select New Connection</h1>
@@ -141,7 +215,9 @@
                     <th>Connect</th>
                 </tr>
 
-        </thead><tbody id="tblAccessPointList"></tbody></table>
+            </thead>
+            <tbody id="tblAccessPointList"></tbody>
+        </table>
     </main>
     <footer>
         <div id="scroller">

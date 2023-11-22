@@ -1,5 +1,6 @@
 include "wifi.fbs";
 include "systeminfo.fbs";
+include "usersettings.fbs";
 
 namespace webmanager;
 
@@ -23,7 +24,25 @@ table LiveLogItem{
     text:string;
 }
 
-union Message{RequestWifiAccesspoints, ResponseWifiAccesspoints, RequestWifiConnect, ResponseWifiConnectSuccessful, ResponseWifiConnectFailed, RequestWifiDisconnect, ResponseWifiDisconnect, RequestSystemData, ResponseSystemData, LiveLogItem, RequestJournal, ResponseJournal, RequestRestart}
+union Message{
+    RequestWifiAccesspoints, 
+    ResponseWifiAccesspoints, 
+    RequestWifiConnect, 
+    ResponseWifiConnectSuccessful, 
+    ResponseWifiConnectFailed, 
+    RequestWifiDisconnect, 
+    ResponseWifiDisconnect, 
+    RequestSystemData, 
+    ResponseSystemData, 
+    LiveLogItem, 
+    RequestJournal, 
+    ResponseJournal, 
+    RequestRestart, 
+    RequestGetUserSettings, 
+    ResponseGetUserSettings, 
+    RequestSetUserSettings, 
+    ResponseSetUserSettings
+    }
 
 
 table MessageWrapper{

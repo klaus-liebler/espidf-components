@@ -1,2 +1,4 @@
 node_modules/
 dist*/
+flatbuffers_gen
+certificates/

@@ -21,8 +21,8 @@ table PartitionInfo{
 }
 
 table ResponseSystemData{
-    seconds_epoch:uint32;
-    seconds_uptime:uint32;
+    seconds_epoch:int64;
+    seconds_uptime:int64;
     free_heap:uint32;
     mac_address_wifi_sta:Mac6;
     mac_address_wifi_softap:Mac6;
