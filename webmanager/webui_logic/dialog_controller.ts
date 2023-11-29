@@ -6,7 +6,7 @@ export interface IDialogBodyRenderer{
 }
 
 export enum Severrity{
-    NONE,
+    SUCCESS,
     INFO,
     WARN,
     ERROR,
@@ -97,7 +97,7 @@ export class DialogController {
             case Severrity.WARN: return "ye"
             case Severrity.ERROR: return "rd"; 
             case Severrity.INFO: return "gr";
-            default: return "";
+            case Severrity.SUCCESS:return "gr";
         }
     }
 
@@ -113,17 +113,18 @@ export class DialogController {
         this.dialog.showModal();
     }
 
-    public showOKCancelDialog(severity: Severrity, messageText:string, handler: ((a:string)=>any)|null):HTMLDialogElement {
+    public showOKCancelDialog(severity: Severrity, messageText:string, handler: ((clickedOk:boolean)=>any)|null):HTMLDialogElement {
         this.whipeDialog();
         this.dialogHeading.innerText="Message";
         Html(this.dialogBodyRight, "p", [], [], messageText);
         Html(this.dialogBodyLeft, "span", [], [this.severity2class(severity)], this.severity2symbol(severity));
         Html(this.dialogFooter, "button", ["type", "button"], [], "OK").onclick=(e)=>{
             this.dialog.close('OK');
-            if(handler!=null) handler("OK");
+            if(handler!=null) handler(true);
         };
         Html(this.dialogFooter, "button", ["type", "button"], [], "Cancel").onclick=(e)=>{
             this.dialog.close('Cancel');
+            if(handler!=null) handler(false);
         };
         this.dialog.showModal();
         return this.dialog;

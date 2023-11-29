@@ -27,15 +27,13 @@
     "html-minifier": "^4.0.0",
     "rollup": "^4.4.0",
     "sass": "^1.62.1",
+    "selfsigned": "^2.4.1",
+    "serialport": "^12.0.0",
     "ts-node": "^10.9.1",
     "tsify": "^5.0.4",
     "tslib": "^2.6.2",
     "typescript": "^5.0.4",
     "vinyl-buffer": "^1.0.1",
-    "vinyl-source-stream": "^2.0.0",
-    "selfsigned": "^2.4.1"
-  },
-  "dependencies": {
-    
+    "vinyl-source-stream": "^2.0.0"
   }
 }

@@ -29,6 +29,7 @@
 #include <spi_flash_mmap.h>
 #include <esp_sntp.h>
 #include <time.h>
+#include <mdns.h>
 #include <common-esp32.hh>
 #include <esp_log.h>
 #include <sys/time.h>
@@ -77,8 +78,6 @@ namespace webmanager
     extern const char webmanager_html_br_start[] asm("_binary_app_html_br_start");
     extern const size_t webmanager_html_br_length asm("app_html_br_length");
 
-     
-
     constexpr size_t MAX_AP_NUM = 15;
     constexpr int ATTEMPTS_TO_RECONNECT{5};
 
@@ -103,7 +102,7 @@ namespace webmanager
         CONNECTED,
     };
 
-    enum class UPDATE_REASON_CODE
+    enum class UPDATE_REASON_CODE //TODO: not used anymore -->delete it!
     {
         NO_CHANGE = 0,
         CONNECTION_ESTABLISHED = 1,
@@ -138,16 +137,30 @@ namespace webmanager
         }
     };
 
+    class AsyncResponse{
+        public:
+        uint8_t* buffer;
+        size_t buffer_len;
+       
+        AsyncResponse(flatbuffers::FlatBufferBuilder* b){
+            uint8_t* bp=b->GetBufferPointer();
+            buffer_len = b->GetSize();
+            buffer = new uint8_t[buffer_len];
+            std::memcpy(buffer, bp, buffer_len);
+        }
+
+        ~AsyncResponse(){
+            free(buffer);
+        }
+    };
+    
     class M;
     class M
     {
     private:
         static M *singleton;
         static __NOINIT_ATTR std::array<MessageLogEntry, STORAGE_LENGTH> BUFFER;
-        bool hasRealtime{false};
-        WifiStationState staState{WifiStationState::NO_CONNECTION};
-        // bool accessPointIsActive{false}; // nein, diese Information kann über esp_wifi_get_mode() immer herausgefunden werden
-        int remainingAttempsToConnectAsSTA{0};
+        
 
         esp_netif_t *wifi_netif_sta{nullptr};
         esp_netif_t *wifi_netif_ap{nullptr};
@@ -160,14 +173,19 @@ namespace webmanager
         uint16_t accessp_records_len{0};
 
         SemaphoreHandle_t webmanager_semaphore{nullptr};
-
         TimerHandle_t wifi_manager_retry_timer{nullptr};
         TimerHandle_t wifi_manager_shutdown_ap_timer{nullptr};
-
         temperature_sensor_handle_t temp_handle{nullptr};
-
-        UPDATE_REASON_CODE urc{UPDATE_REASON_CODE::NO_CHANGE};
-        bool apAvailable{false};
+        httpd_handle_t http_server{nullptr};
+        int websocket_file_descriptor{-1};
+        
+        bool hasRealtime{false};
+        WifiStationState staState{WifiStationState::NO_CONNECTION};
+        UPDATE_REASON_CODE urc{UPDATE_REASON_CODE::NO_CHANGE}; //TODO: urc wird nicht benötigt
+        // bool accessPointIsActive{false}; // nein, diese Information kann über esp_wifi_get_mode() immer herausgefunden werden
+        int remainingAttempsToConnectAsSTA{0};
+        bool initialScanIsActive{false};
+        bool scanIsActive{false};
 
         M(){
             struct timeval tv_now;
@@ -183,7 +201,6 @@ namespace webmanager
         void connectAsSTA()
         {
             ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config_sta));
-            esp_wifi_scan_stop(); // for sanity
             ESP_LOGI(TAG, "Calling esp_wifi_connect() for WIFI_IF_STA with ssid %s and password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password);
             ESP_ERROR_CHECK(esp_wifi_connect());
             staState = WifiStationState::ABOUT_TO_CONNECT;
@@ -319,15 +336,24 @@ namespace webmanager
             case WIFI_EVENT_SCAN_DONE:
             {
                 ESP_LOGD(TAG, "WIFI_EVENT_SCAN_DONE");
+                initialScanIsActive=false;
+                scanIsActive=false;
                 wifi_event_sta_scan_done_t *event_sta_scan_done = (wifi_event_sta_scan_done_t *)event_data;
-                if (event_sta_scan_done->status == 1)
-                    break; // break, falls der Scan nicht erfolgreich abgeschlossen wurde (wegen Abbruch oder einem voreiligen Neustart)
-                xSemaphoreTake(webmanager_semaphore, portMAX_DELAY);
-                // As input param, it stores max AP number ap_records can hold. As output param, it receives the actual AP number this API returns.
-                // As a consequence, ap_num MUST be reset to MAX_AP_NUM at every scan */
-                accessp_records_len = MAX_AP_NUM;
-                ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&accessp_records_len, accessp_records));
-                xSemaphoreGive(webmanager_semaphore);
+                if (event_sta_scan_done->status == 0){//0="Success"
+                    xSemaphoreTake(webmanager_semaphore, portMAX_DELAY);
+                    // As input param, it stores max AP number ap_records can hold. As output param, it receives the actual AP number this API returns.
+                    // As a consequence, ap_num MUST be reset to MAX_AP_NUM at every scan */
+                    accessp_records_len = MAX_AP_NUM;
+                    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&accessp_records_len, accessp_records));
+                    xSemaphoreGive(webmanager_semaphore);
+                    ESP_LOGI(TAG, "Wifi Scan successfully completed. Found %d access points.", accessp_records_len);
+                }
+                if(staState==WifiStationState::NO_CONNECTION){
+                    //nur wenn wir uns weiterhin im NO_CONNECTION befinden, soll beständig weiter gesucht werden
+                    //in den "Übergangs"-Zuständen (about to connect, should_connect) darf nichts passierte
+                    //im Zustand CONNECTED soll höchstens einmalig auf expliziten Wunsch gesucht werden
+                    esp_wifi_scan_start(&scan_config, false);
+                }
                 break;
             }
             case WIFI_EVENT_STA_DISCONNECTED:
@@ -361,6 +387,13 @@ namespace webmanager
                         ESP_LOGW(TAG, "After (several?) attemps it was not possible to establish connection as STA with ssid %s and password %s (Reason %d). Start AccessPoint mode with ssid %s and password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password, wifi_event_sta_disconnected->reason, wifi_config_ap.ap.ssid, wifi_config_ap.ap.password);
                         staState = WifiStationState::NO_CONNECTION;
                         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_APSTA));
+                        esp_netif_ip_info_t ip_info = {};
+                        flatbuffers::FlatBufferBuilder b(1024);
+                        auto res =  CreateResponseWifiConnectFailedDirect(b, (char*)wifi_config_sta.sta.ssid);
+                        auto mwresp=CreateMessageWrapper(b, Message::Message_ResponseWifiConnectFailed, res.Union());
+                        b.Finish(mwresp);
+                        AsyncResponse *a = new AsyncResponse(&b);
+                        if(httpd_queue_work(http_server, M::ws_async_send, a)!=ESP_OK){delete(a);}
                     }
                     else
                     {
@@ -381,14 +414,11 @@ namespace webmanager
                 esp_netif_ip_info_t ip_info = {};
                 esp_netif_get_ip_info(wifi_netif_ap, &ip_info);
                 ESP_LOGI(TAG, "Successfully started Access Point with ssid %s and password '%s'. Website is here: http://" IPSTR " . Webmanager is here: http://" IPSTR "/webmanager", wifi_config_ap.ap.ssid, wifi_config_ap.ap.password, IP2STR(&ip_info.ip), IP2STR(&ip_info.ip));
-
-                apAvailable = true;
                 break;
             }
             case WIFI_EVENT_AP_STOP:
             {
                 ESP_LOGI(TAG, "Successfully closed Access Point.");
-                apAvailable = false;
                 break;
             }
             case WIFI_EVENT_AP_STACONNECTED:
@@ -442,6 +472,20 @@ namespace webmanager
                 }
                 xSemaphoreGive(webmanager_semaphore);
                 esp_sntp_init();
+                esp_netif_ip_info_t ip_info = {};
+                esp_netif_get_ip_info(wifi_netif_sta, &ip_info);
+                wifi_ap_record_t ap = {};
+                esp_wifi_sta_get_ap_info(&ap);
+                const char *hostname;
+                esp_netif_get_hostname(wifi_netif_sta, &hostname); //is is not necessary to "free" hostname
+                flatbuffers::FlatBufferBuilder b(1024);
+                auto res =  CreateResponseWifiConnectSuccessfulDirect(b, (char*)wifi_config_sta.sta.ssid, ip_info.ip.addr, ip_info.netmask.addr, ip_info.gw.addr, ap.rssi, hostname);
+                auto mwresp=CreateMessageWrapper(b, Message::Message_ResponseWifiConnectSuccessful, res.Union());
+                b.Finish(mwresp);
+                AsyncResponse *a = new AsyncResponse(&b);
+                if(httpd_queue_work(http_server, M::ws_async_send, a)!=ESP_OK){
+                    delete(a);
+                }
                 break;
             }
             /* This event arises when the IPV4 address become invalid.
@@ -458,22 +502,36 @@ namespace webmanager
             }
         }
 
+        static void ws_async_send(void *arg)
+        {
+            M* myself = M::GetSingleton();
+            AsyncResponse *a = static_cast<AsyncResponse*>(arg);
+            httpd_ws_frame_t ws_pkt={0};
+            ws_pkt.payload = a->buffer;
+            ws_pkt.len = a->buffer_len;
+            ws_pkt.type = HTTPD_WS_TYPE_BINARY;
+            httpd_ws_send_frame_async(myself->http_server, myself->websocket_file_descriptor, &ws_pkt);
+            delete(a);
+        }
+        
         static int logging_vprintf(const char *fmt, va_list l)
         {
-            // Convert according to format
-            char *buffer;
-            int buffer_len = vasprintf(&buffer, fmt, l);
-            // printf("logging_vprintf buffer_len=%d\n",buffer_len);
-            // printf("logging_vprintf buffer=[%.*s]\n", buffer_len, buffer);
-            if (buffer_len == 0)
-            {
+            char* buffer{nullptr};
+            size_t buffer_len=vasprintf(&buffer, fmt, l);
+            if(buffer_len==0){
+                free(buffer);
                 return 0;
             }
+            flatbuffers::FlatBufferBuilder b(1024);
+            auto res = CreateLiveLogItemDirect(b, buffer);
+            auto mw=CreateMessageWrapper(b, Message::Message_LiveLogItem, res.Union());
+            b.Finish(mw);
 
-            // Send MessageBuffer
-            // printf("logging_vprintf sended=%d\n",sended);
-
-            // Write to stdout
+            AsyncResponse *a = new AsyncResponse(&b);
+            M* myself = M::GetSingleton();
+            if(httpd_queue_work(myself->http_server, M::ws_async_send, a)!=ESP_OK){
+                delete(a);
+            }
             free(buffer);
             return vprintf(fmt, l);
         }
@@ -487,25 +545,26 @@ namespace webmanager
         {
             if (req->method == HTTP_GET)
             {
-                ESP_LOGI(TAG, "Handshake done, the new connection was opened");
+                ESP_LOGI(TAG, "Handshake done, the new websocket connection was opened");
                 return ESP_OK;
             }
-            httpd_ws_frame_t ws_pkt;
-            memset(&ws_pkt, 0, sizeof(httpd_ws_frame_t));
-            ws_pkt.type = HTTPD_WS_TYPE_TEXT;
+            httpd_ws_frame_t ws_pkt={0};
+
+            //always store the last websocket file descriptor
+            this->websocket_file_descriptor = httpd_req_to_sockfd(req);
 
             /* Set max_len = 0 to get the frame len */
-            assert(httpd_ws_recv_frame(req, &ws_pkt, 0)==ESP_OK);
-
-            ESP_LOGI(TAG, "frame len is %d, frame type is %d", ws_pkt.len, ws_pkt.type);
+            ESP_ERROR_CHECK(httpd_ws_recv_frame(req, &ws_pkt, 0));
             if (ws_pkt.len == 0 || ws_pkt.type != HTTPD_WS_TYPE_BINARY)
             {
+                ESP_LOGE(TAG, "Received an empty or an non binary websocket frame");
                 return ESP_OK;
             }
             uint8_t *buf = (uint8_t *)malloc(ws_pkt.len);
             assert(buf);
             ws_pkt.payload = buf;
             esp_err_t ret = httpd_ws_recv_frame(req, &ws_pkt, ws_pkt.len);
+            ESP_LOGI(TAG, "frame len is %d, frame type is %d", ws_pkt.len, ws_pkt.type);
             if (ret != ESP_OK)
             {
                 ESP_LOGE(TAG, "httpd_ws_recv_frame failed with %d", ret);
@@ -522,7 +581,13 @@ namespace webmanager
                 sendResponseJournal(req, &ws_pkt);
                 break;
             case webmanager::Message::Message_RequestWifiAccesspoints:
-                sendResponseWifiAccesspoints(req, &ws_pkt);
+                sendResponseWifiAccesspoints(req, &ws_pkt, mw->message_as_RequestWifiAccesspoints()->forceNewSearch());
+                break;
+            case webmanager::Message::Message_RequestRestart:
+                esp_restart();
+                break;
+            case webmanager::Message::Message_RequestWifiConnect:
+                handleRequestWifiConnect(req, &ws_pkt, mw->message_as_RequestWifiConnect());
                 break;
             default:
                 break;
@@ -531,22 +596,52 @@ namespace webmanager
             return ESP_OK;
         }
 
-        esp_err_t doRestart()
-        {
-            esp_restart();
-            return ESP_OK;
+        esp_err_t handleRequestWifiConnect(httpd_req_t *req, httpd_ws_frame_t *ws_pkt, const webmanager::RequestWifiConnect *wifiConnect){
+             
+            esp_err_t ret{ESP_OK};//necessary for ESP_GOTO_ON_FALSE
+            const char* ssid = wifiConnect->ssid()->c_str();
+            const char* password = wifiConnect->password()->c_str();
+            size_t len{0};
+            len = strlen(ssid);
+            ESP_GOTO_ON_FALSE(len <= MAX_SSID_LEN - 1, ESP_FAIL, negativeresponse, TAG, "SSID too long");
+            len = strlen(password);
+            ESP_GOTO_ON_FALSE(len>0, ESP_FAIL, negativeresponse, TAG, "no password given");
+            snprintf((char *)wifi_config_sta.sta.ssid, MAX_SSID_LEN - 1, ssid);
+            snprintf((char *)wifi_config_sta.sta.password, MAX_PASSPHRASE_LEN - 1, password);
+            ESP_LOGI(TAG, "Got a new SSID %s and PASSWORD %s from browser.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password);
+            remainingAttempsToConnectAsSTA = 1;
+            connectAsSTA();
+            return ret;
+        negativeresponse:
+            flatbuffers::FlatBufferBuilder b(1024);
+            auto res =  CreateResponseWifiConnectFailedDirect(b, (char*)wifi_config_sta.sta.ssid);
+            auto mwresp=CreateMessageWrapper(b, Message::Message_ResponseWifiConnectFailed, res.Union());
+            b.Finish(mwresp);
+            AsyncResponse *a = new AsyncResponse(&b);
+            if(httpd_queue_work(http_server, M::ws_async_send, a)!=ESP_OK){
+                delete(a);
+            }
+            return ret;
         }
 
-        esp_err_t sendResponseWifiAccesspoints(httpd_req_t *req, httpd_ws_frame_t *ws_pkt){
+
+        esp_err_t sendResponseWifiAccesspoints(httpd_req_t *req, httpd_ws_frame_t *ws_pkt, bool forceUpdate){
             ESP_LOGI(TAG, "Prepare to send ResponseWifiAccesspoints");
-            auto scanResult=esp_wifi_scan_start(&scan_config, true);
-            ESP_LOGI(TAG, "Scan finished with %s", esp_err_to_name(scanResult));
+            esp_err_t forcedScanResult{ESP_OK};
+            if(!initialScanIsActive && !scanIsActive && forceUpdate){
+                forcedScanResult=esp_wifi_scan_start(&scan_config, true);
+                this->scanIsActive=true;
+                ESP_LOGI(TAG, "Forced scan finished with %s", esp_err_to_name(forcedScanResult));
+            }
             xSemaphoreTake(webmanager_semaphore, portMAX_DELAY);
-            
             flatbuffers::FlatBufferBuilder b(1024);
             std::vector<flatbuffers::Offset<AccessPoint>> ap_vector;
-            if(scanResult!=ESP_OK){
-                ap_vector.push_back(CreateAccessPoint(b, b.CreateString("Error while scanning"), scanResult, 0, 0));
+            if(forceUpdate && forcedScanResult!=ESP_OK){
+                ap_vector.push_back(CreateAccessPoint(b, b.CreateString("Error while forced scanning"), forcedScanResult, 0, 0));
+            }
+            else if(initialScanIsActive){
+                ap_vector.push_back(CreateAccessPoint(b, b.CreateString("Initial Scan was still active. Refresh page in a few seconds!"), 0, 0, 0));
+            
             }else{
                 for (size_t i = 0; i < accessp_records_len; i++)
                 {
@@ -627,7 +722,7 @@ namespace webmanager
             gettimeofday(&tv_now, nullptr);
 
             float tsens_out{0.0};
-            ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &tsens_out));
+            //ESP_ERROR_CHECK(temperature_sensor_get_celsius(temp_handle, &tsens_out));
 
             ResponseSystemDataBuilder rsdb(b);
             rsdb.add_partitions(piVecOffset);
@@ -748,7 +843,9 @@ namespace webmanager
             localtime_r(&now, &timeinfo);
             strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
             ESP_LOGI(TAG, "Notification of a time synchronization. The current date/time in Berlin is: %s", strftime_buf);
-            webmanager::M::GetSingleton()->LogJournal(messagecodes::C::SNTP, esp_timer_get_time() / 1000);
+            M* myself =webmanager::M::GetSingleton();
+            myself->hasRealtime=true;
+            myself->LogJournal(messagecodes::C::SNTP, esp_timer_get_time() / 1000);
         }
 
         void RegisterHTTPDHandlers(httpd_handle_t httpd_handle)
@@ -759,6 +856,7 @@ namespace webmanager
             ESP_ERROR_CHECK(httpd_register_uri_handler(httpd_handle, &webmanager_get));
             ESP_ERROR_CHECK(httpd_register_uri_handler(httpd_handle, &ota_post));
             ESP_ERROR_CHECK(httpd_register_uri_handler(httpd_handle, &webmanager_ws));
+            this->http_server=httpd_handle;
         }
 
         esp_err_t Init(const char *accessPointSsid, const char *accessPointPassword, const char *hostnamePattern, bool resetStoredWifiConnection, bool init_netif_and_create_event_loop = true)
@@ -863,6 +961,12 @@ namespace webmanager
             ESP_ERROR_CHECK(esp_netif_set_hostname(wifi_netif_sta, hostname));
             ESP_ERROR_CHECK(esp_netif_set_hostname(wifi_netif_ap, hostname));
 
+            ESP_ERROR_CHECK(mdns_init());
+            ESP_ERROR_CHECK(mdns_hostname_set(hostname));
+            ESP_LOGI(TAG, "mdns hostname set to: [%s]", hostname);
+            const char* MDNS_INSTANCE="SENSACT_MDNS_INSTANCE";
+            ESP_ERROR_CHECK(mdns_instance_name_set(MDNS_INSTANCE));
+
             /* DHCP AP configuration */
             esp_netif_ip_info_t ap_ip_info = {};
             IP4_ADDR(&ap_ip_info.ip, 192, 168, 210, 0);
@@ -881,30 +985,35 @@ namespace webmanager
                 ESP_LOGI(TAG, "Forced to delete saved wifi configuration. Starting access point and do an initial scan.");
                 delete_sta_config();
                 ESP_ERROR_CHECK(esp_wifi_start());
-                esp_wifi_scan_start(&scan_config, true);
+                esp_wifi_scan_start(&scan_config, false);
+                scanIsActive=true;
+                initialScanIsActive=true;
             }
             else if (read_sta_config() != ESP_OK)
             {
                 ESP_LOGI(TAG, "No saved wifi configuration found on startup. Starting access point and do an initial scan.");
                 ESP_ERROR_CHECK(esp_wifi_start());
-                esp_wifi_scan_start(&scan_config, true);
+                esp_wifi_scan_start(&scan_config, false);
+                scanIsActive=true;
+                initialScanIsActive=true;
             }
             else
             {
-                ESP_LOGI(TAG, "Saved wifi found on startup. Will attempt to do an initial scan and then connect to ssid %s with password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password);
+                ESP_LOGI(TAG, "Saved wifi found on startup. Will attempt to connect to ssid %s with password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password);
                 ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
                 ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config_sta));
                 ESP_ERROR_CHECK(esp_wifi_start());
-                esp_wifi_scan_start(&scan_config, true);
+                scanIsActive=false;
+                initialScanIsActive=false;
                 remainingAttempsToConnectAsSTA = ATTEMPTS_TO_RECONNECT;
                 ESP_ERROR_CHECK(esp_wifi_connect());
                 staState = WifiStationState::ABOUT_TO_CONNECT;
             }
 
             
-            temperature_sensor_config_t temp_sensor = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
-            ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor, &temp_handle));
-            ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
+            //temperature_sensor_config_t temp_sensor = TEMPERATURE_SENSOR_CONFIG_DEFAULT(-10, 80);
+            //ESP_ERROR_CHECK(temperature_sensor_install(&temp_sensor, &temp_handle));
+            //ESP_ERROR_CHECK(temperature_sensor_enable(temp_handle));
 
             return ESP_OK;
         }

@@ -1,6 +1,7 @@
 include "wifi.fbs";
 include "systeminfo.fbs";
 include "usersettings.fbs";
+include "timeseries.fbs";
 
 namespace webmanager;
 
@@ -24,6 +25,9 @@ table LiveLogItem{
     text:string;
 }
 
+
+
+
 union Message{
     RequestWifiAccesspoints, 
     ResponseWifiAccesspoints, 
@@ -41,7 +45,9 @@ union Message{
     RequestGetUserSettings, 
     ResponseGetUserSettings, 
     RequestSetUserSettings, 
-    ResponseSetUserSettings
+    ResponseSetUserSettings,
+    RequestTimeseries,
+    ResponseTimeseriesDummy
     }
 
 

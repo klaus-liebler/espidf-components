@@ -11,7 +11,8 @@ import { Mac6, } from "./flatbuffers_gen/webmanager/mac6";
 import { LiveLogItem } from "./flatbuffers_gen/webmanager/live-log-item";
 import { ResponseWifiAccesspoints } from "./flatbuffers_gen/webmanager/response-wifi-accesspoints";
 import { AccessPoint } from "./flatbuffers_gen/webmanager/access-point";
-import { BooleanSetting, EnumSetting, IntegerSetting, JournalItem, RequestGetUserSettings, RequestSetUserSettings, ResponseGetUserSettings, ResponseJournal, ResponseSetUserSettings, Setting, SettingWrapper, StringSetting } from "./flatbuffers_gen/webmanager";
+import { BooleanSetting, EnumSetting, IntegerSetting, JournalItem, RequestGetUserSettings, RequestSetUserSettings, RequestTimeseries, RequestWifiConnect, ResponseGetUserSettings, ResponseJournal, ResponseSetUserSettings, ResponseWifiConnectFailed, ResponseWifiConnectSuccessful, Setting, SettingWrapper, StringSetting, TimeGranularity } from "./flatbuffers_gen/webmanager";
+import { createTimeseries } from "./timeseries_generator";
 
 
 const PORT = 443;
@@ -49,19 +50,37 @@ function sendResponseSystemData(ws: WebSocket) {
     ws.send(b.asUint8Array());
 }
 
+const AP_GOOD="Connectable AP";
+const AP_BAD="Non connectable AP";
+
 function sendResponseWifiAccesspoints(ws: WebSocket) {
     let b = new flatbuffers.Builder(1024);
-    let ap0Offset = AccessPoint.createAccessPoint(b, b.createString("MySSID0"), 11, -72, 2);
-    let ap1Offset = AccessPoint.createAccessPoint(b, b.createString("MySSID1"), 11, -62, 2);
+    let ap0Offset = AccessPoint.createAccessPoint(b, b.createString(AP_GOOD), 11, -72, 2);
+    let ap1Offset = AccessPoint.createAccessPoint(b, b.createString(AP_BAD), 11, -62, 2);
     let accesspointsOffset = ResponseWifiAccesspoints.createAccesspointsVector(b, [ap0Offset, ap1Offset]);
     let r = ResponseWifiAccesspoints.createResponseWifiAccesspoints(b, b.createString("MyHostnameKL"), b.createString("MySsidApKL"), accesspointsOffset);
     b.finish(MessageWrapper.createMessageWrapper(b, Message.ResponseWifiAccesspoints, r));
     ws.send(b.asUint8Array());
 }
+
+function sendResponseWifiConnectionSuccessOrFailed(ws: WebSocket, req: RequestWifiConnect){
+    let b = new flatbuffers.Builder(1024);
+    if(req.ssid()==AP_GOOD){
+        let r = ResponseWifiConnectSuccessful.createResponseWifiConnectSuccessful(b, b.createString(AP_GOOD), 0xFF101001,0x10101002,0xFF101003, -62, b.createString("MyHostname"));
+        b.finish(MessageWrapper.createMessageWrapper(b, Message.ResponseWifiConnectSuccessful, r));
+    }else{
+        let r = ResponseWifiConnectFailed.createResponseWifiConnectFailed(b, b.createString(AP_GOOD));
+        b.finish(MessageWrapper.createMessageWrapper(b, Message.ResponseWifiConnectFailed, r));
+    }
+    ws.send(b.asUint8Array());
+}
+
+
 let toggler: boolean = false;
 let counter: number = 42;
 
-function sendResponseGetUserSettings(ws: WebSocket, groupName: string) {
+function sendResponseGetUserSettings(ws: WebSocket, req: RequestGetUserSettings) {
+    var groupName= req.groupName();
     let b = new flatbuffers.Builder(1024);
     let settingsOffset: number = 0;
     if (groupName == "Group1") {
@@ -87,7 +106,7 @@ function sendResponseGetUserSettings(ws: WebSocket, groupName: string) {
     ws.send(b.asUint8Array());
 }
 
-function sendResponseSetUserSettings(ws: WebSocket, b: flatbuffers.Builder, req: RequestSetUserSettings) {
+function sendResponseSetUserSettings(ws: WebSocket, req: RequestSetUserSettings) {
     let groupName = req.groupName()!;
     let names: string[] = [];
     for (let i = 0; i < req.settingsLength(); i++) {
@@ -95,7 +114,7 @@ function sendResponseSetUserSettings(ws: WebSocket, b: flatbuffers.Builder, req:
         names.push(name);
     }
     console.log(`Received setting for group ${groupName} with settings ${names.join(", ")}`);
-    b = new flatbuffers.Builder(1024);
+    let b = new flatbuffers.Builder(1024);
     let stringsOffset: number[] = [];
     names.forEach((v) => stringsOffset.push(b.createString(v)));
     let settingsOffset = ResponseSetUserSettings.createSettingsVector(b, stringsOffset);
@@ -120,6 +139,10 @@ function sendResponseJournal(ws: WebSocket) {
     ws.send(b.asUint8Array());
 }
 
+function sendResponseTimeseries(ws: WebSocket, req:RequestTimeseries) {
+    ws.send(createTimeseries(req.granularity()));
+}
+
 
 function process(buffer: Buffer, ws: WebSocket) {
     let data = new Uint8Array(buffer);
@@ -135,16 +158,19 @@ function process(buffer: Buffer, ws: WebSocket) {
             setTimeout(() => { sendResponseSystemData(ws); }, 500);
             break;
         case Message.RequestGetUserSettings:
-            let m = <RequestGetUserSettings>mw.message(new RequestGetUserSettings());
-            setTimeout(() => { sendResponseGetUserSettings(ws, m.groupName()); }, 500);
+            setTimeout(() => { sendResponseGetUserSettings(ws, <RequestGetUserSettings>mw.message(new RequestGetUserSettings())); }, 500);
             break;
         case Message.RequestSetUserSettings:
-            let m1 = <RequestSetUserSettings>mw.message(new RequestSetUserSettings());
-            setTimeout(() => { sendResponseSetUserSettings(ws, b, m1); }, 100);
+            setTimeout(() => { sendResponseSetUserSettings(ws, <RequestSetUserSettings>mw.message(new RequestSetUserSettings())); }, 100);
             break;
         case Message.RequestJournal:
-            setTimeout(() => { sendResponseJournal(ws); }, 100);
-            break
+            setTimeout(() => { sendResponseJournal(ws);}, 100);
+            break;
+        case Message.RequestTimeseries:
+            setTimeout(()=>{sendResponseTimeseries(ws, <RequestTimeseries>mw.message(new RequestTimeseries())), 200});
+        case Message.RequestWifiConnect:{
+            setTimeout(()=>{sendResponseWifiConnectionSuccessOrFailed(ws, <RequestWifiConnect>mw.message(new RequestWifiConnect()));}, 3000);
+        }
         default:
             break;
     }
@@ -211,7 +237,7 @@ server.listen(PORT, () => {
                 let li = LiveLogItem.endLiveLogItem(b);
                 mw = MessageWrapper.createMessageWrapper(b, Message.LiveLogItem, li);
                 b.finish(mw);
-                wss.clients.forEach(ws => ws.send(b.asUint8Array()));
+                //wss.clients.forEach(ws => ws.send(b.asUint8Array()));
                 break;
             default:
                 break;

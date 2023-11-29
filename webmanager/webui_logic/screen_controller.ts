@@ -38,7 +38,7 @@ export class ScreenControllerWrapper  implements AppManagement{
     registerWebsocketMessageTypes(listener: WebsocketMessageListener, ...messageType: number[]): void {
         return this.parent.registerWebsocketMessageTypes(listener, ...messageType);
     }
-    sendWebsocketMessage(data: ArrayBuffer, messageToUnlock?: Message | undefined, maxWaitingTimeMs?: number | undefined): void {
+    sendWebsocketMessage(data: ArrayBuffer, messageToUnlock?:Array<Message> | undefined, maxWaitingTimeMs?: number | undefined): void {
         return this.parent.sendWebsocketMessage(data, messageToUnlock, maxWaitingTimeMs);
     }
 }
@@ -94,7 +94,7 @@ export class WeblogScreenController extends ScreenController {
         let n = RequestJournal.createRequestJournal(b);
         let mw = MessageWrapper.createMessageWrapper(b, Message.RequestJournal, n);
         b.finish(mw);
-        this.appManagement.sendWebsocketMessage(b.asUint8Array(), Message.ResponseJournal, 3000);
+        this.appManagement.sendWebsocketMessage(b.asUint8Array(), [Message.ResponseJournal], 3000);
     }
 
     onCreate(): void {

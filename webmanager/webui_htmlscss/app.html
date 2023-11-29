@@ -87,11 +87,13 @@
     </header>
     <nav>
         <ul>
-            <li><a href="#" data-nav="home"><span>&#8962;</span> Home</a></li>
+            <li><a href="#" data-nav="home"><span>☗</span> Home</a></li>
             <li><a href="#" data-nav="localapps"><span>&#128204;</span><span>Local Apps</span></a></li>
             <li><a href="#" data-nav="globalapps"><span>&#127760;</span><span>Global Apps</span></a></li>
             <li><a href="#" data-nav="wifimanager"><span>📶</span><span>Wifi Manager</span></a></li>
+            <li><a href="#" data-nav="timeseries"><span>📊</span><span>Timeseries</span></a></li>
             <li><a href="#" data-nav="systemsettings"><span>&#9881;</span> <span>System Settings</span> </a></li>
+            
             <li><a href="#" data-nav="usersettings"><span>&#9000;</span><span>User Settings</span></a></li>
         </ul>
     </nav>
@@ -112,6 +114,11 @@
     </main>
     <main data-nav="usersettings">
         <h1>User Settings</h1>
+    </main>
+    <main data-nav="timeseries">
+        <h1>Timeseries Sconds</h1>
+        <div id="timeseries_seconds"></div>
+          
     </main>
     <main data-nav="systemsettings">
         <h1>Application Partitions</h1>
@@ -141,9 +148,7 @@
             </thead>
             <tbody id="tblParameters"></tbody>
         </table>
-        <h1>Chartist Example (for later use)</h1>
-        <div id="chartist_example"></div>
-          
+       
         <h1 class="dangerous">Dangerous Zone</h1>
         <h2>Over-the-air Firmware Update</h2>
         <table>
@@ -196,6 +201,18 @@
                 <tr>
                     <td>Signal Strength</td>
                     <td class="current_rssi"></td>
+                </tr>
+                <tr>
+                    <td>IP</td>
+                    <td class="current_ip"></td>
+                </tr>
+                <tr>
+                    <td>Netmask</td>
+                    <td class="current_netmask"></td>
+                </tr>
+                <tr>
+                    <td>Gateway</td>
+                    <td class="current_gw"></td>
                 </tr>
 
             </tbody>

@@ -16,7 +16,7 @@ table AccessPoint{
 }
 
 table RequestWifiAccesspoints{
-
+    forceNewSearch:bool;
 }
 
 table ResponseWifiAccesspoints{
@@ -32,18 +32,15 @@ table RequestWifiConnect{
 
 table ResponseWifiConnectSuccessful{
     ssid:string;
-    rssi:string;
-    ip:Ip4;
-    netmask:Ip4;
-    gateway:Ip4;
+    ip:uint32;
+    netmask:uint32;
+    gateway:uint32;
+    rssi:int8;
+    hostname:string;
 }
 
 table ResponseWifiConnectFailed{
     ssid:string;
-}
-
-struct Ip4 {
-    v:[uint8:4];
 }
 
 table RequestWifiDisconnect{

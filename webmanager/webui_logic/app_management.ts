@@ -10,5 +10,5 @@ export interface AppManagement
     DialogController():DialogController;
     MainElement():HTMLElement;
     registerWebsocketMessageTypes(listener: WebsocketMessageListener, ...messageType:number[]):void;
-    sendWebsocketMessage(data:ArrayBuffer, messageToUnlock?:Message, maxWaitingTimeMs?:number):void;
+    sendWebsocketMessage(data:ArrayBuffer, messageToUnlock?:Array<Message>, maxWaitingTimeMs?:number):void;
 };

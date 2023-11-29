@@ -1,5 +1,5 @@
 import { Severrity } from "./dialog_controller";
-import { Ip4, Message, MessageWrapper, RequestWifiAccesspoints, RequestWifiConnect, RequestWifiDisconnect, ResponseWifiAccesspoints, ResponseWifiConnectSuccessful, UpdateReasonCode } from "./flatbuffers_gen/webmanager";
+import {Message, MessageWrapper, RequestWifiAccesspoints, RequestWifiConnect, RequestWifiDisconnect, ResponseWifiAccesspoints, ResponseWifiConnectSuccessful, UpdateReasonCode } from "./flatbuffers_gen/webmanager";
 import { ScreenController } from "./screen_controller";
 import { gel, $, gqsa, Html } from "./utils";
 import * as flatbuffers from 'flatbuffers';
@@ -15,12 +15,12 @@ export class WifimanagerController extends ScreenController {
         });
     }
 
-    private sendRequestWifiAccesspoints() {
+    private sendRequestWifiAccesspoints(forceNewSearch:boolean) {
         let b = new flatbuffers.Builder(1024);
-        let n = RequestWifiAccesspoints.createRequestWifiAccesspoints(b);
+        let n = RequestWifiAccesspoints.createRequestWifiAccesspoints(b, forceNewSearch);
         let mw = MessageWrapper.createMessageWrapper(b, Message.RequestWifiAccesspoints, n);
         b.finish(mw);
-        this.appManagement.sendWebsocketMessage(b.asUint8Array());
+        this.appManagement.sendWebsocketMessage(b.asUint8Array(), [Message.ResponseWifiAccesspoints], 30000);
     }
 
     private sendRequestWifiConnect(ssid: string, password: string) {
@@ -30,7 +30,7 @@ export class WifimanagerController extends ScreenController {
         let n = RequestWifiConnect.createRequestWifiConnect(b, ssidOffset, passwordOffset);
         let mw = MessageWrapper.createMessageWrapper(b, Message.RequestWifiConnect, n);
         b.finish(mw);
-        this.appManagement.sendWebsocketMessage(b.asUint8Array());
+        this.appManagement.sendWebsocketMessage(b.asUint8Array(), [Message.ResponseWifiConnectSuccessful, Message.ResponseWifiConnectFailed], 30000);
     }
 
     private sendRequestWifiDisconnect() {
@@ -48,17 +48,16 @@ export class WifimanagerController extends ScreenController {
         this.appManagement.registerWebsocketMessageTypes(this, Message.ResponseWifiDisconnect);
 
         gel("btnWifiShowDetails").onclick = () => this.appManagement.DialogController().showOKDialog(Severrity.INFO, "Das sind die Details", (s) => { });
-        gel("btnWifiUpdateList").onclick = () => this.sendRequestWifiAccesspoints();
-        gel("btnWifiDisconnect").onclick=()=> this.appManagement.DialogController().showOKCancelDialog(Severrity.WARN, "Möchten Sie wirklich die bestehende Verbindung trennen und damit auch vom ESP32 löschen?", (s) => {this.sendRequestWifiDisconnect();});
+        gel("btnWifiUpdateList").onclick = () =>{this.sendRequestWifiAccesspoints(false);};
+        gel("btnWifiDisconnect").onclick=()=> this.appManagement.DialogController().showOKCancelDialog(Severrity.WARN, "Möchten Sie wirklich die bestehende Verbindung trennen und damit auch vom ESP32 löschen?", (ok) => {if(ok) this.sendRequestWifiDisconnect();});
     }
 
-    private ip4_2_string(ip: Ip4|null): string {
-        if(!ip) return "No IP address"
-        return `${ip.v(0)}.${ip.v(1)}.${ip.v(2)}.${ip.v(3)}`;
+    private ip4_2_string(ip: number): string {
+        return `${(ip>>24)&0xFF}.${(ip>>16)&0xFF}.${(ip>>8)&0xFF}.${(ip>>0)&0xFF}`;
     }
 
     onFirstStart(): void {
-        this.sendRequestWifiAccesspoints();
+        this.sendRequestWifiAccesspoints(false);
     }
     onRestart(): void {
 
@@ -112,10 +111,13 @@ export class WifimanagerController extends ScreenController {
 
     onResponseWifiConnectSuccessful(r: ResponseWifiConnectSuccessful) {
         console.info("Got connection!");
-        this.appManagement.DialogController().showOKDialog(0, `Connection to ${r.ssid()} was successful. `, () => { });
+        this.appManagement.DialogController().showOKDialog(Severrity.SUCCESS, `Connection to ${r.ssid()} was successful. `, () => { });
+        gqsa(".current_ssid", (e) => e.textContent = r.ssid());
         gqsa(".current_ip", (e) => e.textContent = this.ip4_2_string(r.ip()));
         gqsa(".current_netmask", (e) => e.textContent = this.ip4_2_string(r.netmask()));
         gqsa(".current_gw", (e) => e.textContent = this.ip4_2_string(r.gateway()));
+        gqsa(".current_hostname", (e) => e.textContent = r.hostname());
+        gqsa(".current_rssi", (e) => e.textContent = r.rssi().toLocaleString()+"dB");
     }
 
     onMessage(messageWrapper: MessageWrapper): void {
@@ -125,15 +127,15 @@ export class WifimanagerController extends ScreenController {
                 break;
             case Message.ResponseWifiConnectSuccessful:
                 this.onResponseWifiConnectSuccessful(<ResponseWifiConnectSuccessful>messageWrapper.message(new ResponseWifiConnectSuccessful()));
-                
+               
                 break;
             case Message.ResponseWifiDisconnect:
                 console.log("Manual disconnect requested...");
-                this.appManagement.DialogController().showOKDialog(0, "Manual disconnection was successful. ", () => { });
+                this.appManagement.DialogController().showOKDialog(Severrity.INFO, "Manual disconnection was successful. ", () => { });
                 break;
             case Message.ResponseWifiConnectFailed:
                 console.info("Connection attempt failed!");
-                this.appManagement.DialogController().showOKDialog(0, "Connection attempt failed! ", () => { });
+                this.appManagement.DialogController().showOKDialog(Severrity.ERROR, "Connection attempt failed! ", () => { });
             break;
         }
 

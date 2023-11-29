@@ -109,7 +109,7 @@ export function CreateCert(dnsHostname: string, certificateCaPemPath: fs.PathOrF
 	let caPrivateKey = forge.pki.privateKeyFromPem(fs.readFileSync(privateKeyCaPemPath).toString());
 	return certHelper(
 		false, 
-		createSubject("Server"), //CN of subject may not contain server address (found out by experiments)
+		createSubject("HTTPS Server on ESP32"), //CN of subject may not contain server address (found out by experiments)
 		caCert.subject.attributes, //issuer is the subject of the rootCA
 		createHostExtensions(dnsHostname, caCert.serialNumber),
 		caPrivateKey //sign with private key of rootCA

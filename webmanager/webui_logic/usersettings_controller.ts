@@ -56,7 +56,7 @@ export class UsersettingsController extends ScreenController implements ValueUpd
         let n = RequestGetUserSettings.createRequestGetUserSettings(b, b.createString(groupName));
         let mw = MessageWrapper.createMessageWrapper(b, Message.RequestGetUserSettings, n);
         b.finish(mw);
-        this.appManagement.sendWebsocketMessage(b.asUint8Array(), Message.ResponseGetUserSettings, 3000);
+        this.appManagement.sendWebsocketMessage(b.asUint8Array(), [Message.ResponseGetUserSettings], 3000);
     }
 
     sendRequestSetUserSettings(groupName: string) {
@@ -69,7 +69,7 @@ export class UsersettingsController extends ScreenController implements ValueUpd
         let n = RequestSetUserSettings.createRequestSetUserSettings(b, b.createString(groupName), settingsOffset);
         let mw = MessageWrapper.createMessageWrapper(b, Message.RequestSetUserSettings, n);
         b.finish(mw);
-        this.appManagement.sendWebsocketMessage(b.asUint8Array(), Message.ResponseSetUserSettings, 3000);
+        this.appManagement.sendWebsocketMessage(b.asUint8Array(), [Message.ResponseSetUserSettings], 3000);
     }
 
     

@@ -1,0 +1,18 @@
+namespace webmanager;
+
+enum TimeGranularity:byte
+{
+    TEN_SECONDS = 0,
+    ONE_MINUTE = 1,
+    ONE_HOUR = 2,
+    ONE_DAY = 3,
+}
+
+table RequestTimeseries{
+    granularity:TimeGranularity;
+    offset:int;
+}
+
+table ResponseTimeseriesDummy{
+    granularity:TimeGranularity;
+}

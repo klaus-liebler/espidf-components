@@ -1,5 +1,7 @@
 const debug = false;
-const hostname = "esp32host_2df5c8";
+
+var comPort="COM3";
+var hostnamePrefix= "esp32host_";
 
 
 /*
@@ -24,12 +26,11 @@ const DEFAULT_STATE = 'NRW';
 const DEFAULT_LOCALITY = 'Greven';
 
 const path = require("node:path");
-import fs, { readFile, readFileSync, writeFileSync } from "node:fs";
+import fs from "node:fs";
 import { exec } from "node:child_process";
+import * as os from 'node:os';
 
 import * as gulp from "gulp";
-import * as forge from "node-forge";
-import crypto from "crypto";
 import * as rollup from "rollup"
 import rollupTypescript from '@rollup/plugin-typescript';
 import * as brotli from 'brotli'
@@ -42,6 +43,7 @@ import { inlineSource } from 'inline-source';
 import * as sass from "sass";
 import * as htmlMinifier from "html-minifier";
 import * as cert from "./certificates"
+import { getMac } from "./esp32";
 
 const HTML_SPA_FILE = "app.html";
 const HTML_SPA_FILE_BROTLI = HTML_SPA_FILE + ".br";
@@ -215,15 +217,20 @@ exports.rootCA = (cb: gulp.TaskFunctionCallback) => {
 }
 
 exports.certificates = (cb: gulp.TaskFunctionCallback) => {
+  const hostname = fs.readFileSync("hostname.txt").toString();//esp32host_2df5c8
+  const this_pc_name = os.hostname();
   let caCertPath = path.join(GENERATED_CERTIFICATES, ROOT_CA_PEM_CRT);
   let caPrivkeyPath = path.join(GENERATED_CERTIFICATES, ROOT_CA_PEM_PRVTKEY);
-  let hostCert = cert.CreateCert("esp32xyxz", caCertPath, caPrivkeyPath);
+  let hostCert = cert.CreateCert(hostname, caCertPath, caPrivkeyPath);
   writeFileCreateDirLazy(path.join(GENERATED_CERTIFICATES, HOST_CERT_PEM_CRT), hostCert.certificate);
   writeFileCreateDirLazy(path.join(GENERATED_CERTIFICATES, HOST_CERT_PEM_PRVTKEY), hostCert.privateKey, cb);
-  let testserverCert = cert.CreateCert("kliebler_laptop", caCertPath, caPrivkeyPath);
+  let testserverCert = cert.CreateCert(this_pc_name, caCertPath, caPrivkeyPath);
   writeFileCreateDirLazy(path.join(GENERATED_CERTIFICATES, TESTSERVER_CERT_PEM_CRT), testserverCert.certificate);
   writeFileCreateDirLazy(path.join(GENERATED_CERTIFICATES, TESTSERVER_CERT_PEM_PRVTKEY), testserverCert.privateKey, cb);
-  
+}
+
+exports.getmac = async (cb:gulp.TaskFunctionCallback)=>{
+  return getMac(comPort, hostnamePrefix);
 }
 
 exports.default = exports.build

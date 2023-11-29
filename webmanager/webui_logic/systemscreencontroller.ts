@@ -7,8 +7,7 @@ import { ScreenController } from "./screen_controller";
 import * as flatbuffers from 'flatbuffers';
 import { Severrity } from "./dialog_controller";
 import { UPLOAD_URL } from "./constants";
-import {LineChart, LineChartOptions} from './chartist/charts/LineChart/index';
-import { AxisOptions } from "./chartist/core/types";
+
 
 
 export class SystemScreenController extends ScreenController {
@@ -33,7 +32,7 @@ export class SystemScreenController extends ScreenController {
         let n = RequestSystemData.createRequestSystemData(b);
         let mw = MessageWrapper.createMessageWrapper(b, Message.RequestSystemData, n);
         b.finish(mw);
-        this.appManagement.sendWebsocketMessage(b.asUint8Array(), Message.ResponseSystemData, 3000);
+        this.appManagement.sendWebsocketMessage(b.asUint8Array(), [Message.ResponseSystemData], 3000);
     }
 
     onMessage(messageWrapper: MessageWrapper): void {
@@ -127,37 +126,11 @@ export class SystemScreenController extends ScreenController {
     onCreate(): void {
         this.btnUpload.onclick = (e: MouseEvent) => this.startUpload(e);
         this.btnRestart.onclick = (e: MouseEvent) => {
-            this.appManagement.DialogController().showOKCancelDialog(Severrity.WARN, "Are you rellay sure to restart the system", () => this.sendRequestRestart());
+            this.appManagement.DialogController().showOKCancelDialog(Severrity.WARN, "Are you rellay sure to restart the system", (s) => {if(s) this.sendRequestRestart();});
 
 
         };
-        const ctx = <HTMLCanvasElement>document.getElementById('myChart')!;
-
-        var data = {
-            // A labels array that can contain any sort of values
-            labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
-            // Our series array that contains series objects or in this case series data arrays
-            series: [
-                [5, 2, 4, 2, 0]
-            ]
-        };
-
-
-
-        let options: LineChartOptions<AxisOptions, AxisOptions>={};
     
-        new LineChart(
-            '#chartist_example',
-            {
-                labels: [1, 2, 3, 4, 5, 6, 7, 8],
-                series: [[5, 9, 7, 8, 5, 3, 5, 4]]
-            },
-            {
-                low: 0,
-                showArea: true,
-                width: '400px',
-                height: '200px'
-            });
         this.appManagement.registerWebsocketMessageTypes(this, Message.ResponseSystemData);
 
     }

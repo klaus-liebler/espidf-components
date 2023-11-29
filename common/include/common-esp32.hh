@@ -110,6 +110,16 @@ constexpr uint64_t IO(int n)
         }                                                                            \
     } while (0)
 
+#define RETURN_ERRORCODE_ON_FALSE(a, errorCode, format, ...)                                         \
+    do                                                                               \
+    {                                                                                \
+        if (unlikely(!(a)))                                                          \
+        {                                                                            \
+            ESP_LOGE(TAG, "%s(%d): " format, __FUNCTION__, __LINE__, ##__VA_ARGS__); \
+            return errorCode;                                                         \
+        }                                                                            \
+    } while (0)
+
 #define ERRORCODE_CHECK(x)                                                                                            \
     do                                                                                                                \
     {                                                                                                                 \
