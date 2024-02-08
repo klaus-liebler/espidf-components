@@ -94,6 +94,8 @@ int32_t ParseInt32(const uint8_t * const message, uint32_t offset);
 
 void WriteUInt32(uint32_t value, uint8_t *message, uint32_t offset);
 
+inline void WriteU8(uint8_t value, uint8_t *message, uint32_t offset){message[offset]=value;};
+
 float ParseFloat32(const uint8_t * const message, uint32_t offset);
 
 void WriteInt64(int64_t value, uint8_t *message, uint32_t offset);
