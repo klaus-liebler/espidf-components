@@ -1,5 +1,7 @@
 #pragma once
 
+
+
 #include <string>
 #include <cstring>
 #include "freertos/FreeRTOS.h"
@@ -12,6 +14,10 @@
 
 #include "lwip/err.h"
 #include "lwip/sys.h"
+
+#if CONFIG_HTTPD_MAX_REQ_HDR_LEN<1024
+    #error CONFIG_HTTPD_MAX_REQ_HDR_LEN<1024
+#endif
 namespace WIFISOFTAP{
 
 

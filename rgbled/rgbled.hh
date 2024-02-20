@@ -11,6 +11,8 @@
 #define TAG "RGBLED"
 namespace RGBLED
 {
+   
+    
     enum class DeviceType
     {
         WS2812,
@@ -122,16 +124,12 @@ namespace RGBLED
             for (i = 0; i < LEDSIZE; i++)
             {
                 AnimationPattern *p = patterns[i];
-                if (p != nullptr)
-                {
-                    // avoid using SetPixel here, as this may have unintentional consequences
-                    CRGB color = p->Animate(now);
-                    if ((this->table[i]) != (color.raw32))
-                    {
-                        this->table[i] = color.raw32;
-                        this->dirty = true;
-                    }
-                }
+                if (p == nullptr) continue;
+                // avoid using SetPixel here, as this may have unintentional consequences
+                CRGB color = p->Animate(now);
+                if ((this->table[i]) == (color.raw32)) continue;
+                this->table[i] = color.raw32;
+                this->dirty = true;
             }
 
             if (!dirty && !forceRefreshEvenIfNotNecessary)
@@ -250,7 +248,7 @@ namespace RGBLED
             return Refresh(timeout_ms);
         }
 
-        esp_err_t Init(const spi_host_device_t spi_host, const gpio_num_t gpio, const spi_dma_chan_t dma_channel)
+        esp_err_t Begin(const spi_host_device_t spi_host, const gpio_num_t gpio, const spi_dma_chan_t dma_channel=SPI_DMA_CH_AUTO)
         {
             spi_bus_config_t bus_config = {};
             bus_config.miso_io_num = GPIO_NUM_NC;

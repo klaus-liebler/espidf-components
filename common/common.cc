@@ -35,6 +35,50 @@ uint16_t ParseUInt16(const uint8_t *const message, uint32_t offset)
 	return step;
 }
 
+uint16_t ParseU16_BE(const uint8_t *const message, size_t offset)
+{
+	uint16_t step;
+	uint8_t *ptr1 = (uint8_t *)&step;
+	uint8_t *ptr2 = ptr1 + 1;
+	*ptr2 = *(message + offset);
+	*ptr1 = *(message + offset + 1);
+	return step;
+}
+
+void WriteU16_BE(uint16_t value, uint8_t *message, size_t offset)
+{
+	uint8_t *ptr1 = (uint8_t *)&value;
+	uint8_t *ptr2 = ptr1 + 1;
+	*(message + offset) = *ptr2;
+	*(message + offset + 1) = *ptr1;
+}
+
+uint32_t ParseU32_BE(const uint8_t *const message, size_t offset)
+{
+	uint32_t step;
+	uint8_t *ptr1 = (uint8_t *)&step;
+	uint8_t *ptr2 = ptr1 + 1;
+	uint8_t *ptr3 = ptr1 + 2;
+	uint8_t *ptr4 = ptr1 + 3;
+	*ptr4 = *(message + offset);
+	*ptr3 = *(message + offset + 1);
+	*ptr2 = *(message + offset + 2);
+	*ptr1 = *(message + offset + 3);
+	return step;
+}
+
+void WriteU32_BE(uint32_t value, uint8_t *message, size_t offset)
+{
+	uint8_t *ptr1 = (uint8_t *)&value;
+	uint8_t *ptr2 = ptr1 + 1;
+	uint8_t *ptr3 = ptr1 + 2;
+	uint8_t *ptr4 = ptr1 + 3;
+	*(message + offset) = *ptr4;
+	*(message + offset + 1) = *ptr3;
+	*(message + offset + 2) = *ptr2;
+	*(message + offset + 3) = *ptr1;
+}
+
 uint64_t ParseUInt64(const uint8_t *const message, uint32_t offset)
 {
 	uint64_t step;
@@ -118,7 +162,7 @@ void WriteUInt32(uint32_t value, uint8_t *message, uint32_t offset)
 	message[0 + offset] = (value & 0xFF) >> 0;
 	message[1 + offset] = (value & 0xFFFF) >> 8;
 	message[2 + offset] = (value & 0xFFFFFF) >> 16;
-	message[3 + offset] = (value & 0xFFFFFF) >> 24;
+	message[3 + offset] = (value & 0xFFFFFFFF) >> 24;
 }
 
 void WriteInt64(int64_t value, uint8_t *message, uint32_t offset)
@@ -133,13 +177,7 @@ void WriteInt64(int64_t value, uint8_t *message, uint32_t offset)
 	message[7 + offset] = (value & 0xFFFFFFFFFFFFFFFF) >> 56;
 }
 
-void WriteUInt16BigEndian(uint16_t value, uint8_t *message, uint32_t offset)
-{
-	uint8_t *ptr1 = (uint8_t *)&value;
-	uint8_t *ptr2 = ptr1 + 1;
-	*(message + offset) = *ptr2;
-	*(message + offset + 1) = *ptr1;
-}
+
 
 void WriteInt16BigEndian(int16_t value, uint8_t *message, uint32_t offset)
 {
@@ -149,15 +187,7 @@ void WriteInt16BigEndian(int16_t value, uint8_t *message, uint32_t offset)
 	*(message + offset + 1) = *ptr1;
 }
 
-uint16_t ParseUInt16BigEndian(const uint8_t *const message, uint32_t offset)
-{
-	uint16_t step;
-	uint8_t *ptr1 = (uint8_t *)&step;
-	uint8_t *ptr2 = ptr1 + 1;
-	*ptr2 = *(message + offset);
-	*ptr1 = *(message + offset + 1);
-	return step;
-}
+
 
 int16_t ParseInt16BigEndian(const uint8_t *const message, uint32_t offset)
 {

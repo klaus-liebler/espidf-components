@@ -102,7 +102,9 @@ void WriteInt64(int64_t value, uint8_t *message, uint32_t offset);
 void WriteUInt16BigEndian(uint16_t value, uint8_t *message, uint32_t offset);
 
 void WriteInt16BigEndian(int16_t value, uint8_t *message, uint32_t offset);
-
-uint16_t ParseUInt16BigEndian(const uint8_t *const message, uint32_t offset);
-
 int16_t ParseInt16BigEndian(const uint8_t *const message, uint32_t offset);
+
+uint16_t ParseU16_BE(const uint8_t *const message, size_t offset);
+void WriteU16_BE(uint16_t value, uint8_t *message, size_t offset);
+uint32_t ParseU32_BE(const uint8_t *const message, size_t offset);
+void WriteU32_BE(uint32_t value, uint8_t *message, size_t offset);
