@@ -22,6 +22,11 @@ namespace BUZZER
     class M
     {
     private:
+        const Note *nextNote{nullptr};
+        int64_t nextNoteTimeMs;
+        ledc_channel_t channel;
+        ledc_timer_t timer_num;
+
         int64_t GetMillis64()
         {
             return esp_timer_get_time() / 1000ULL;
@@ -29,13 +34,7 @@ namespace BUZZER
 
         void StartBuzzer(double freqHz)
         {
-            ledc_timer_config_t buzzer_timer;
-            buzzer_timer.duty_resolution = LEDC_TIMER_10_BIT; // resolution of PWM duty
-            buzzer_timer.freq_hz = freqHz;                    // frequency of PWM signal
-            buzzer_timer.speed_mode = LEDC_LOW_SPEED_MODE;    // timer mode
-            buzzer_timer.timer_num = LEDC_TIMER_2;            // timer index
-            buzzer_timer.clk_cfg = LEDC_AUTO_CLK;
-            ledc_timer_config(&buzzer_timer);
+            ledc_set_freq(LEDC_LOW_SPEED_MODE, this->timer_num, freqHz);
             ledc_set_duty(LEDC_LOW_SPEED_MODE, this->channel, 512);
             ledc_update_duty(LEDC_LOW_SPEED_MODE, this->channel);
         }
@@ -47,15 +46,13 @@ namespace BUZZER
         }
 
     public:
-        const Note *nextNote{nullptr};
-        int64_t nextNoteTimeMs;
-        ledc_channel_t channel;
 
-        M(ledc_channel_t channel=LEDC_CHANNEL_2):channel(channel){}
+        M(ledc_channel_t channel=LEDC_CHANNEL_2, ledc_timer_t timer_num=LEDC_TIMER_2):channel(channel), timer_num(timer_num){}
 
-        void Begin(gpio_num_t pin, ledc_timer_t timer_num=LEDC_TIMER_2)
+        void Begin(gpio_num_t pin)
         {
             // Buzzer
+            ESP_LOGI(TAG, "Configuring Buzzer Timer at pin %i with channel %i", (int)pin, (int)channel);
             ledc_timer_config_t buzzer_timer = {};
             buzzer_timer.duty_resolution = LEDC_TIMER_10_BIT; // resolution of PWM duty
             buzzer_timer.freq_hz = 440;                       // frequency of PWM signal
@@ -63,7 +60,7 @@ namespace BUZZER
             buzzer_timer.timer_num = timer_num;               // timer index
             buzzer_timer.clk_cfg = LEDC_AUTO_CLK;
             ESP_ERROR_CHECK(ledc_timer_config(&buzzer_timer));
-
+            
             ledc_channel_config_t buzzer_channel = {};
             buzzer_channel.gpio_num = pin;
             buzzer_channel.speed_mode = LEDC_LOW_SPEED_MODE;
