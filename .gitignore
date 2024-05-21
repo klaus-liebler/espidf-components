@@ -1,1 +1,4 @@
 **/node_modules/
+**/flatbuffers_gen/
+**/dist_webui/
+**/certificates/
