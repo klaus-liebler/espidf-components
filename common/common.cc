@@ -114,6 +114,10 @@ void WriteInt8(int8_t value, uint8_t *message, uint32_t offset)
 	uint8_t *ptr1 = (uint8_t *)&value;
 	*(message + offset) = *ptr1;
 }
+void WriteU8(int8_t value, uint8_t *message, uint32_t offset)
+{
+	*(message + offset) = value;
+}
 
 uint32_t ParseUInt32(const uint8_t *const message, uint32_t offset)
 {
