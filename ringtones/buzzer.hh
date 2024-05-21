@@ -8,14 +8,16 @@
 
 namespace BUZZER
 {
-
+   
     struct Note
     {
         uint16_t freq;
         uint16_t durationMs;
     };
-
-#include "songs.hh"
+    
+#define END_OF_SONG {0,0}
+#include "songs.hh.inc"
+#undef END_OF_SONG
 #define TAG "RINGTONE"
     class M
     {

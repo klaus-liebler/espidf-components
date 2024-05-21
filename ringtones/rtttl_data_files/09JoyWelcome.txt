@@ -1,0 +1,1 @@
+JoyWelcome:d=4,o=5,b=120: g, 8e, g, 8c6, e, d, c
