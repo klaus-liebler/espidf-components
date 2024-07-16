@@ -2,6 +2,7 @@
 #include <cmath>
 #include <limits>
 #include <cstring>
+#include <vector>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_check.h"
@@ -132,24 +133,45 @@ namespace OneWire
         private:
         onewire_bus_handle_t bus;
         std::vector<Ds18B20 *> ds18b20_vect;
-        time_t nextReadoutUs{INT64_MAX};
+        time_t nextReadoutMs{INT64_MAX};
 
         public:
-        void SensorLoop()
+        void Loop(time_t nowMs)
         {
-            time_t nowUs = esp_timer_get_time();
-            if(nowUs<nextReadoutUs) return;
+            if(nowMs<nextReadoutMs) return;
             for (Ds18B20* sensor:this->ds18b20_vect)
             {
                sensor->UpdateTemperature(bus);
             }
             TriggerTemperatureConversionForAll();
-            nextReadoutUs=esp_timer_get_time()+800*1000;
+            nextReadoutMs=nowMs+800;
         }
 
         float GetMostRecentTemp(size_t index){
             if(index>=ds18b20_vect.size()) return std::numeric_limits<float>::quiet_NaN();
             return ds18b20_vect.at(index)->GetTemperature();
+        }
+
+        float GetMaxTemp(){
+            
+            float max{-273.15};
+            for (size_t i = 0; i < ds18b20_vect.size(); i++)
+            {
+                float t=ds18b20_vect.at(i)->GetTemperature();
+                if(t>max){ max=t;}
+            }
+            return max;
+        }
+
+        float GetMinTemp(){
+            
+            float min{+1000};
+            for (size_t i = 0; i < ds18b20_vect.size(); i++)
+            {
+                float t=ds18b20_vect.at(i)->GetTemperature();
+                if(t<min){ min=t;}
+            }
+            return min;
         }
 
 
@@ -197,7 +219,7 @@ namespace OneWire
             }
             ESP_ERROR_CHECK(onewire_del_device_iter(iter));
             TriggerTemperatureConversionForAll();
-            nextReadoutUs=esp_timer_get_time()+800*1000;
+            nextReadoutMs=(esp_timer_get_time()/1000)+800;
             ESP_LOGI(TAG, "Searching done, %d DS18B20 device(s) found", ds18b20_vect.size());
         }
     };

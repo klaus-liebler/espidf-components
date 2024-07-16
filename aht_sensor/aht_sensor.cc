@@ -15,16 +15,16 @@ namespace AHT
     constexpr bool GetRHumidityCmd{true};
     constexpr bool GetTempCmd{false};
 
-    M::M(iI2CPort* i2c_port, AHT::ADDRESS slaveaddr) : I2CSensor(i2c_port, (uint8_t)slaveaddr)
+    M::M(i2c_master_bus_handle_t bus_handle, AHT::ADDRESS slaveaddr) : I2CSensor(bus_handle, (uint8_t)slaveaddr)
     {
     }
     ErrorCode M::Initialize(int64_t &waitTillFirstTrigger)
     {
-        if (i2c_port->IsAvailable((uint8_t)this->address_7bit) != ErrorCode::OK)
+        if (Probe((uint8_t)this->address_7bit) != ErrorCode::OK)
         {
             ESP_LOGW(TAG, "AHTxy not found");
         }
-        if (i2c_port->Write((uint8_t)this->address_7bit, eSensorCalibrateCmd, sizeof(eSensorCalibrateCmd)) != ErrorCode::OK)
+        if (WriteRegs8(this->address_7bit, eSensorCalibrateCmd, sizeof(eSensorCalibrateCmd)) != ErrorCode::OK)
         {
             ESP_LOGE(TAG, "Could not write calibration commands.");
             return ErrorCode::GENERIC_ERROR;
@@ -42,7 +42,7 @@ namespace AHT
     {
         uint8_t temp[6];
         waitTillNextTrigger=500;
-        i2c_port->Read( (uint8_t)this->address_7bit, temp, 6);
+        Read8(temp, 6);
         this->humid = ((temp[1] << 16) | (temp[2] << 8) | temp[3]) >> 4;
         this->temp = ((temp[3] & 0x0F) << 16) | (temp[4] << 8) | temp[5];
         ESP_LOGD(TAG, "Readout H=%lu T=%lu", this->humid, this->temp);
@@ -52,7 +52,7 @@ namespace AHT
     {
         waitTillReadout = 500;
         ESP_LOGD(TAG, "Trigger!!!!");
-        return i2c_port->Write((uint8_t)this->address_7bit, eSensorMeasureCmd, sizeof(eSensorMeasureCmd));
+        return Write8(eSensorMeasureCmd, sizeof(eSensorMeasureCmd));
     }
 
     ErrorCode M::Read(float &humidity, float &temperature)
@@ -63,12 +63,12 @@ namespace AHT
     }
 
     ErrorCode M::Reset(){
-        return i2c_port->Write((uint8_t)this->address_7bit, &eSensorResetCmd, 1);
+        return Write8(&eSensorResetCmd, 1);
     }
 
     uint8_t M::readStatus(){
         uint8_t result = 0;
-        i2c_port->Read( (uint8_t)this->address_7bit, &result, 1);
+        Read8(&result, 1);
         return result;
     }
 }

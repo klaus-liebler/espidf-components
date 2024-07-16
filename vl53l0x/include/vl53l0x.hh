@@ -159,7 +159,7 @@ namespace VL53L0X
         ErrorCode Readout(int64_t& waitTillNextTrigger) override;
         ErrorCode Initialize(int64_t& waitTillFirstTrigger) override;
     public:
-        M(iI2CPort* i2c_port, I2C_ADDRESS address = I2C_ADDRESS::DEFAULT);
+        M(i2c_master_bus_handle_t bus_handle, I2C_ADDRESS address = I2C_ADDRESS::DEFAULT);
 
         uint16_t ReadOut();
     

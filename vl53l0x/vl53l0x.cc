@@ -29,7 +29,7 @@
 namespace VL53L0X
 {
 
-    M::M(iI2CPort* i2c_port, I2C_ADDRESS address) : I2CSensor(i2c_port, (uint8_t)address) {}
+    M::M(i2c_master_bus_handle_t bus_handle, I2C_ADDRESS address) : I2CSensor(bus_handle, (uint8_t)address) {}
 
     ErrorCode M::Trigger(int64_t& waitTillReadout){
         waitTillReadout=250;
@@ -292,57 +292,33 @@ namespace VL53L0X
     // Write an 8-bit register
     void M::writeReg(uint8_t reg, uint8_t value)
     {
-        last_status = (uint8_t)i2c_port->WriteSingleReg(address_7bit, reg, value);
+        last_status = (uint8_t)WriteRegs8(reg, &value, 1);
     }
 
-    // Write a 16-bit register
-    void M::writeReg16Bit(uint8_t reg, uint16_t value)
-    {
-        last_status = (uint8_t)i2c_port->WriteSingleReg16(address_7bit, reg, value);
-    }
-
-    // Write a 32-bit register
-    void M::writeReg32Bit(uint8_t reg, uint32_t value)
-    {
-        last_status = (uint8_t)i2c_port->WriteSingleReg32(address_7bit, reg, value);
-    }
 
     // Read an 8-bit register
     uint8_t M::readReg(uint8_t reg)
     {
         uint8_t value;
-        last_status = (uint8_t)i2c_port->ReadReg(address_7bit, reg, &value);
+        last_status = (uint8_t)ReadRegs8(reg, &value, 1);
         return value;
     }
 
-    // Read a 16-bit register
-    uint16_t M::readReg16Bit(uint8_t reg)
-    {
-        uint16_t value;
-        last_status = (uint8_t)i2c_port->ReadSingleReg16(address_7bit, reg, &value);
-        return value;
-    }
 
-    // Read a 32-bit register
-    uint32_t M::readReg32Bit(uint8_t reg)
-    {
-        uint32_t value;
-        last_status = (uint8_t)i2c_port->ReadSingleReg32(address_7bit, reg, &value);
-        return value;
-    }
+
 
     // Write an arbitrary number of bytes from the given array to the sensor,
     // starting at the given register
     void M::writeMulti(uint8_t reg, uint8_t const *src, uint8_t count)
     {
-        last_status = (uint8_t)i2c_port->WriteReg(address_7bit, reg, src, count);
+        last_status = (uint8_t)WriteRegs8(reg, src, count);
     }
 
     // Read an arbitrary number of bytes from the sensor, starting at the given
     // register, into the given array
     void M::readMulti(uint8_t reg, uint8_t *dst, uint8_t count)
     {
-        last_status = (uint8_t)i2c_port->ReadReg(address_7bit, reg, dst, count);
+        last_status = (uint8_t)ReadRegs8(reg, dst, count);
     }
 
     // Set the return signal rate limit check value in units of MCPS (mega counts

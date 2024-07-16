@@ -45,7 +45,7 @@ namespace CCS811
   class M:public I2CSensor
   {
   public:                                                                                                                              // Main interface
-    M(iI2CPort* i2c_port, CCS811::ADDRESS slaveaddr = CCS811::ADDRESS::ADDR0, CCS811::MODE mode=CCS811::MODE::_1SEC, gpio_num_t nwake = (gpio_num_t)GPIO_NUM_NC); // Pin number connected to nWAKE (nWAKE can also be bound to GND, then pass -1), slave address (5A or 5B)
+    M(i2c_master_bus_handle_t bus_handle, CCS811::ADDRESS slaveaddr = CCS811::ADDRESS::ADDR0, CCS811::MODE mode=CCS811::MODE::_1SEC, gpio_num_t nwake = (gpio_num_t)GPIO_NUM_NC); // Pin number connected to nWAKE (nWAKE can also be bound to GND, then pass -1), slave address (5A or 5B)
     ErrorCode Initialize(int64_t& waitTillFirstTrigger) override;                                                                                                        // Reset the CCS811, switch to app mode and check HW_ID. Returns false on problems.
     ErrorCode Trigger(int64_t& waitTillReadout) override {waitTillReadout=1000; return ErrorCode::OK;}
     ErrorCode Readout(int64_t& waitTillNExtTrigger)override;
@@ -73,7 +73,8 @@ namespace CCS811
     uint16_t eco2;
     uint16_t etvoc;
     int _appversion;           // Version of the app firmware inside the CCS811 (for workarounds).
-    bool i2cwrite(int regaddr, int count, uint8_t *buf);
-    bool i2cread(int regaddr, int count, uint8_t *buf);
+    bool i2cwrite(uint8_t regaddr, size_t count, const uint8_t *buf);
+  // Reads 'count` bytes from register at address `regaddr`, and stores them in `buf`. Returns false on I2C problems.
+    bool i2cread(uint8_t regaddr, size_t count, uint8_t *buf);
   };
 };

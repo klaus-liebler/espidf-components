@@ -19,10 +19,7 @@ class iI2CPort{
     virtual ErrorCode Write(const uint8_t address7bit, const uint8_t * const data, const size_t len)=0;
     virtual ErrorCode IsAvailable(const uint8_t address7bit)=0;
     virtual ErrorCode Discover()=0;
-    
 };
-
-class iI2CPort;
 
 class I2C{
     private:

@@ -1,8 +1,7 @@
-#include <inttypes.h>
-#include <i2c.hh>
+#include <cinttypes>
+#include <cstring>
 #include "ccs811.hh"
 #include <esp_log.h>
-#include <string.h>
 #define TAG "CCS811"
 
 namespace CCS811
@@ -38,7 +37,7 @@ namespace CCS811
 #define CCS811_SW_RESET 0xFF   // 4 bytes
 
   // Pin number connected to nWAKE (nWAKE can also be bound to GND, then pass -1), slave address (5A or 5B)
-  M::M(iI2CPort* i2c_port, CCS811::ADDRESS slaveaddr, CCS811::MODE mode, gpio_num_t nwake) : I2CSensor(i2c_port, (uint8_t)slaveaddr), mode(mode), nwake(nwake)
+  M::M(i2c_master_bus_handle_t bus_handle, CCS811::ADDRESS slaveaddr, CCS811::MODE mode, gpio_num_t nwake) : I2CSensor(bus_handle, (uint8_t)slaveaddr), mode(mode), nwake(nwake)
   {
   }
 
@@ -58,11 +57,11 @@ namespace CCS811
     wake_up();
 
     // Try to ping CCS811 (can we reach CCS811 via I2C?)
-    ErrorCode err = i2c_port->IsAvailable((uint8_t)this->address_7bit);
+    ErrorCode err = this->Probe((uint8_t)this->address_7bit);
     if (err != ErrorCode::OK)
     {
       // Try the other slave address
-      err = i2c_port->IsAvailable((uint8_t)(CCS811::ADDRESS::ADDR0) + (uint8_t)(CCS811::ADDRESS::ADDR1) - (uint8_t)(this->address_7bit));
+      err = this->Probe((uint8_t)(CCS811::ADDRESS::ADDR0) + (uint8_t)(CCS811::ADDRESS::ADDR1) - (uint8_t)(this->address_7bit));
       if (err == ErrorCode::OK)
       {
         ESP_LOGE(TAG, "wrong slave address, ping successful on other address");
@@ -611,15 +610,14 @@ namespace CCS811
   // Helper interface: i2c wrapper ======================================================================================
 
   // Writes `count` from `buf` to register at address `regaddr` in the CCS811. Returns false on I2C problems.
-  bool M::i2cwrite(int regaddr, int count, uint8_t *buf)
+  bool M::i2cwrite(uint8_t regaddr, size_t count, const uint8_t *buf)
   {
-    return i2c_port->WriteReg((uint8_t)this->address_7bit, regaddr, buf, count) == ErrorCode::OK;
+    return WriteRegs8(regaddr, buf, count) == ErrorCode::OK;
   }
 
   // Reads 'count` bytes from register at address `regaddr`, and stores them in `buf`. Returns false on I2C problems.
-  bool M::i2cread(int regaddr, int count, uint8_t *buf)
+  bool M::i2cread(uint8_t regaddr, size_t count, uint8_t *buf)
   {
-    return i2c_port->ReadReg((uint8_t)this->address_7bit, regaddr, buf, count) == ErrorCode::OK;
+    return ReadRegs8(regaddr, buf, count) == ErrorCode::OK;
   }
 }
-#undef TAG

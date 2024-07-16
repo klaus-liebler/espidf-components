@@ -1,6 +1,5 @@
 #pragma once
 #include <stdint.h>
-#include <driver/i2c.h>
 #include <i2c_sensor.hh>
 
 namespace AHT
@@ -14,7 +13,7 @@ namespace AHT
  class M:public I2CSensor
   {
   public:                                                                              
-    M(iI2CPort* i2c_port, AHT::ADDRESS slaveaddr = AHT::ADDRESS::default_address); 
+    M(i2c_master_bus_handle_t bus_handle,  AHT::ADDRESS slaveaddr = AHT::ADDRESS::default_address); 
     ErrorCode Initialize(int64_t& waitTillFirstTrigger) override;                                                                                                       
     ErrorCode Trigger(int64_t& waitTillReadout) override;
     ErrorCode Readout(int64_t& waitTillNExtTrigger)override;

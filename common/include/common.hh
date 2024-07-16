@@ -14,6 +14,9 @@ typedef int32_t s32;
 typedef int64_t s64;
 typedef int64_t tms_t;
 
+char *base64_gen_encode(const unsigned char *src, size_t len, size_t *out_len, const char *table, int add_pad);
+char *base64_encode(const void *src, size_t len, size_t *out_len);
+
 template <typename T>
 void SetBitIdx(T &value, const int bitIdx) {
     value |= (1 << bitIdx);
@@ -77,34 +80,31 @@ T clip(const T& n, const T& lower, const T& upper) {
 
 bool GetBitInU8Buf(const uint8_t *buf, size_t offset, size_t bitIdx);
 
-void WriteInt8(int8_t value, uint8_t *message, uint32_t offset);
-int16_t ParseInt16(const uint8_t * const message, uint32_t offset);
+void WriteI8(int8_t value, uint8_t *buffer, uint32_t offset);
+void WriteI16(int16_t value, uint8_t *buffer, uint32_t offset);
+void WriteI32(int32_t value, uint8_t *buffer, uint32_t offset);
+void WriteI64(int64_t value, uint8_t *buffer, uint32_t offset);
 
-void WriteInt16(int16_t value, uint8_t *message, uint32_t offset);
+int16_t ParseI16(const uint8_t * const buffer, uint32_t offset);
+int32_t ParseI32(const uint8_t * const buffer, uint32_t offset);
 
-uint16_t ParseUInt16(const uint8_t * const message, uint32_t offset);
+void WriteU8(uint8_t value, uint8_t *buffer, uint32_t offset);
+void WriteU16(uint16_t value, uint8_t *buffer, uint32_t offset);
+void WriteU32(uint32_t value, uint8_t *buffer, uint32_t offset);
 
-uint64_t ParseUInt64(const uint8_t * const message, uint32_t offset);
+uint8_t ParseU8(const uint8_t * const buffer, uint32_t offset);
+uint16_t ParseU16(const uint8_t * const buffer, uint32_t offset);
+uint32_t ParseU32(const uint8_t * const buffer, uint32_t offset);
+uint64_t ParseU64(const uint8_t * const buffer, uint32_t offset);
 
-void WriteUInt16(uint16_t value, uint8_t *message, uint32_t offset);
 
-uint32_t ParseUInt32(const uint8_t * const message, uint32_t offset);
+float ParseF32(const uint8_t * const buffer, uint32_t offset);
 
-int32_t ParseInt32(const uint8_t * const message, uint32_t offset);
+void WriteI16_BigEndian(int16_t value, uint8_t *buffer, uint32_t offset);
+int16_t ParseI16_BigEndian(const uint8_t *const buffer, uint32_t offset);
 
-void WriteUInt32(uint32_t value, uint8_t *message, uint32_t offset);
+void WriteU16_BigEndian(uint16_t value, uint8_t *buffer, uint32_t offset);
+void WriteU32_BigEndian(uint32_t value, uint8_t *buffer, size_t offset);
 
-inline void WriteU8(uint8_t value, uint8_t *message, uint32_t offset){message[offset]=value;};
-
-float ParseFloat32(const uint8_t * const message, uint32_t offset);
-
-void WriteInt64(int64_t value, uint8_t *message, uint32_t offset);
-void WriteUInt16BigEndian(uint16_t value, uint8_t *message, uint32_t offset);
-
-void WriteInt16BigEndian(int16_t value, uint8_t *message, uint32_t offset);
-int16_t ParseInt16BigEndian(const uint8_t *const message, uint32_t offset);
-
-uint16_t ParseU16_BE(const uint8_t *const message, size_t offset);
-void WriteU16_BE(uint16_t value, uint8_t *message, size_t offset);
-uint32_t ParseU32_BE(const uint8_t *const message, size_t offset);
-void WriteU32_BE(uint32_t value, uint8_t *message, size_t offset);
+uint16_t ParseU16_BigEndian(const uint8_t *const buffer, size_t offset);
+uint32_t ParseU32_BigEndian(const uint8_t *const buffer, size_t offset);

@@ -46,10 +46,10 @@ void SyslogUdp::SetFilter(Facility fac, Severity sev){
 
 void SyslogUdp::Binlog(int64_t timestamp, Severity sev, const char *tag, int64_t additionaIntegerData1, int64_t additionaIntegerData2, const char *fmt, ...){
     xSemaphoreTake(semaphore, portMAX_DELAY);
-    WriteInt64(timestamp, (uint8_t*)BUFFER, 0);
-    WriteInt64(additionaIntegerData1, (uint8_t*)BUFFER, 8);
-    WriteInt64(additionaIntegerData2, (uint8_t*)BUFFER, 16);
-    WriteInt8((int8_t)sev, (uint8_t*)BUFFER, 24);
+    WriteI64(timestamp, (uint8_t*)BUFFER, 0);
+    WriteI64(additionaIntegerData1, (uint8_t*)BUFFER, 8);
+    WriteI64(additionaIntegerData2, (uint8_t*)BUFFER, 16);
+    WriteI8((int8_t)sev, (uint8_t*)BUFFER, 24);
     size_t pos{28};
     pos+=snprintf(BUFFER+pos, sizeof(BUFFER)-pos, tag);
     va_list ap;
