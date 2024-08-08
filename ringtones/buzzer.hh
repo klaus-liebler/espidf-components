@@ -92,7 +92,7 @@ namespace BUZZER
             nextNote = note;
             this->nextNote++;
         }
-
+        bool pauseBetweenNotesFinished{false};
         void Loop()
         {
             if (nextNote == nullptr)
@@ -116,11 +116,18 @@ namespace BUZZER
                     nextNote++;
                 }
             }
+            else if(!pauseBetweenNotesFinished){
+                EndBuzzer();
+                nextNoteTimeMs+=40;
+                pauseBetweenNotesFinished=true;
+
+            }
             else
             {
                 ESP_LOGD(TAG, "Set Note to Frequency %d and wait %d", nextNote->freq, nextNote->durationMs);
                 StartBuzzer(nextNote->freq);
                 nextNoteTimeMs += nextNote->durationMs;
+                pauseBetweenNotesFinished=false;
                 nextNote++;
             }
         }
