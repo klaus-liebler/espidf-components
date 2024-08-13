@@ -66,7 +66,7 @@ namespace modbus
 
     void WriteCRC(uint8_t *data, uint16_t position){
         uint16_t crc = calcCRC(data, position);
-        WriteUInt16(crc, data, position);
+        WriteU16(crc, data, position);
     }
     
     bool validCRC(const uint8_t *data, size_t lenWithoutCRC, uint16_t CRC)

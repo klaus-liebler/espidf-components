@@ -1,10 +1,10 @@
 #pragma once
-#include <stdint.h>
+#include <cstdint>
 #include <cmath>
 #include <i2c_sensor.hh>
 
-namespace hdc1080{
-    constexpr uint16_t I2C_ADDRESS=0x40;
+namespace HDC1080{
+    constexpr uint8_t I2C_ADDRESS=0x40;
     constexpr uint8_t TEMPERATURE_OFFSET = 0x00;
     constexpr uint8_t HUMIDITY_OFFSET = 0x01;
     constexpr uint8_t CONFIG_OFFSET = 0x02;
@@ -42,7 +42,7 @@ namespace hdc1080{
     
     class M:public I2CSensor{
         public:
-            M(iI2CPort* i2c_port):I2CSensor(i2c_port, I2C_ADDRESS){}
+            M(i2c_master_bus_handle_t i2c_port):I2CSensor(i2c_port, I2C_ADDRESS){}
             ErrorCode Reconfigure(TEMPRESOLUTION tempRes, HUMRESOLUTION humRes, HEATER heater){
                 this->tempRes=tempRes;
                 this->humRes=humRes;
@@ -67,26 +67,26 @@ namespace hdc1080{
         
         ErrorCode Initialize(int64_t& wait) override{
             ConfigRegister config;
-            i2c_port->ReadReg(I2C_ADDRESS, CONFIG_OFFSET, &config.rawData, 1);
+            ReadRegs8(CONFIG_OFFSET, &config.rawData, 1);
             config.HumidityMeasurementResolution= (uint8_t)humRes;
             config.TemperatureMeasurementResolution= (uint8_t)tempRes;
             config.Heater= (uint8_t)heater;
             uint8_t dummy[2] = {config.rawData, 0x00};
-            return i2c_port->WriteReg(address_7bit, CONFIG_OFFSET, dummy, 2);
+            return WriteRegs8(CONFIG_OFFSET, dummy, 2);
         }
         ErrorCode Trigger(int64_t& wait) override{
             wait=100;
             uint8_t data = TEMPERATURE_OFFSET;
-            return i2c_port->Write(address_7bit, &data, 1);
+            return Write8(&data, 1);
         }
 
         ErrorCode Readout(int64_t& wait) override{
             wait=100;
             uint16_t rawT{0};
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address_7bit, TEMPERATURE_OFFSET, (uint8_t*)&rawT, 2));
+            ReadRegs8(TEMPERATURE_OFFSET, (uint8_t*)&rawT, 2);
 	        t= (rawT / pow(2, 16)) * 165.0 - 40.0;
             uint16_t rawH{0};
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address_7bit, HUMIDITY_OFFSET, (uint8_t*)&rawH, 2));
+            ReadRegs8(HUMIDITY_OFFSET, (uint8_t*)&rawH, 2);
 	        h = (rawH / pow(2, 16)) * 100.0;
             return ErrorCode::OK;
         }

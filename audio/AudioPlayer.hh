@@ -157,6 +157,7 @@ namespace AudioPlayer
 
         esp_err_t PlayMP3(const uint8_t *file, size_t fileLen, uint8_t volume, bool cancelPrevious)
         {
+            if(!orderQueue) return ESP_FAIL;
             if(file==nullptr || fileLen==0){
                 xQueueOverwrite(orderQueue, &SILENCE_ORDER);
                 return ESP_OK;
@@ -169,6 +170,7 @@ namespace AudioPlayer
         esp_err_t PlayPCM(const uint8_t *file, size_t fileLen, uint32_t sampleRate, uint8_t volume,  bool cancelPrevious)
         {
 
+            if(!orderQueue) return ESP_FAIL;
             AudioOrder ao{AudioType::PCM, file, fileLen, sampleRate, volume, cancelPrevious};
             xQueueOverwrite(orderQueue, &ao);
             return ESP_OK;
@@ -176,12 +178,17 @@ namespace AudioPlayer
 
         esp_err_t Stop()
         {
+            if(!orderQueue) return ESP_FAIL;
             xQueueOverwrite(orderQueue, &SILENCE_ORDER);
             return ESP_OK;
         }
 
  
         esp_err_t Loop(){
+            if(!orderQueue){
+                vTaskDelay(pdMS_TO_TICKS(50));
+                return ESP_FAIL;
+            }
             AudioOrder temp;
             if(currentOrder.type==AudioType::SILENCE || (xQueuePeek(orderQueue, &temp, 0) && temp.cancelPrevious)){
                 if(xQueueReceive(orderQueue, &currentOrder, 0)){

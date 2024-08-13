@@ -51,7 +51,11 @@ namespace CodecManager
     public:
         ErrorCode SetSampleRate(uint32_t sampleRateHz) override
         {
-            ESP_LOGI(TAG, "Change sample rate to %ld Hz", sampleRateHz);
+            if(this->currentSampleRateHz==sampleRateHz){
+                return ErrorCode::OK;
+            }
+            ESP_LOGD(TAG, "Change sample rate to %ld Hz", sampleRateHz);
+            
             i2s_std_clk_config_t clk_cfg ={};//this produces warning! I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)sampleRateHz);
             clk_cfg.sample_rate_hz = sampleRateHz;
             clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;

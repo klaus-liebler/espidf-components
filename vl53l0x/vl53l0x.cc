@@ -304,7 +304,27 @@ namespace VL53L0X
         return value;
     }
 
+    uint16_t M::readReg16Bit(uint8_t reg){
+        uint8_t buf[2];
+        last_status = (uint8_t)ReadRegs8(reg, buf, 2);
+        uint16_t value  = (uint16_t)buf[0] << 8; // value high byte
+        value |=           buf[1];      // value low byte
+        return value;
+    }
 
+    // Write a 16-bit register
+    void M::writeReg16Bit(uint8_t reg, uint16_t value)
+    {
+        uint8_t buf[2] = {(uint8_t)(value >> 8), (uint8_t)(value)};
+        last_status = (uint8_t)WriteRegs8(reg, buf, 2);
+    }
+
+    // Write a 32-bit register
+    void M::writeReg32Bit(uint8_t reg, uint32_t value)
+    {
+        uint8_t buf[4] = {(uint8_t)(value >> 24), (uint8_t)(value >> 16), (uint8_t)(value >> 8), (uint8_t)(value >> 0)};
+        last_status = (uint8_t)WriteRegs8(reg, buf, 4);
+    }
 
 
     // Write an arbitrary number of bytes from the given array to the sensor,

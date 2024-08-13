@@ -6,6 +6,7 @@
 #include "sdkconfig.h"
 #include "esp_timer.h"
 #include <common.hh>
+#include <ctime>
 #include <vector>
 #include "modbuscommons.hh"
 constexpr char MBLOG[] = "MB_SV";
@@ -33,10 +34,10 @@ namespace modbus
                 return  SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::LENGTH_ERROR);
             if (!validCRCInLastTwoBytes(rx_buf, rx_pos))
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::CRC_ERROR);
-            uint16_t startCoil = ParseUInt16BigEndian(rx_buf, 2);
+            uint16_t startCoil = ParseU16_BigEndian(rx_buf, 2);
             if (startCoil >= theBitVector->size())
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
-            uint16_t coilCount = ParseUInt16BigEndian(rx_buf, 4);
+            uint16_t coilCount = ParseU16_BigEndian(rx_buf, 4);
             if (coilCount==0 || (startCoil + coilCount > theBitVector->size()))
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
             if (callbackBeforeRead)
@@ -66,10 +67,10 @@ namespace modbus
                 return  SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::LENGTH_ERROR);
             if (!validCRCInLastTwoBytes(rx_buf, rx_pos))
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::CRC_ERROR);
-            uint16_t startRegister = ParseUInt16BigEndian(rx_buf, 2);
+            uint16_t startRegister = ParseU16_BigEndian(rx_buf, 2);
             if (startRegister >= theRegisters->size())
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
-            uint16_t registerCount = ParseUInt16BigEndian(rx_buf, 4);
+            uint16_t registerCount = ParseU16_BigEndian(rx_buf, 4);
             if (registerCount==0 || (startRegister + registerCount > theRegisters->size()))
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
             if (callbackBeforeRead)
@@ -100,10 +101,10 @@ namespace modbus
                 return  SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::LENGTH_ERROR);
             if (!validCRCInLastTwoBytes(rx_buf, rx_pos))
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::CRC_ERROR);
-            uint16_t coilIndex = ParseUInt16BigEndian(rx_buf, 2);
+            uint16_t coilIndex = ParseU16_BigEndian(rx_buf, 2);
             if (coilIndex >= outputCoils->size())
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
-            uint16_t registerValue = ParseUInt16BigEndian(rx_buf, 4);
+            uint16_t registerValue = ParseU16_BigEndian(rx_buf, 4);
             outputCoils->at(coilIndex) = registerValue!=0;
             if (callbackAfterWrite)
                 callbackAfterWrite(5, coilIndex, 1);
@@ -128,10 +129,10 @@ namespace modbus
                 return  SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::LENGTH_ERROR);
             if (!validCRCInLastTwoBytes(rx_buf, rx_pos))
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::CRC_ERROR);
-            uint16_t registerIndex = ParseUInt16BigEndian(rx_buf, 2);
+            uint16_t registerIndex = ParseU16_BigEndian(rx_buf, 2);
             if (registerIndex >= holdingRegisters->size())
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
-            uint16_t registerValue = ParseUInt16BigEndian(rx_buf, 4);
+            uint16_t registerValue = ParseU16_BigEndian(rx_buf, 4);
             holdingRegisters->at(registerIndex) = registerValue;
             if (callbackAfterWrite)
                 callbackAfterWrite(6, registerIndex, 1);
@@ -140,10 +141,10 @@ namespace modbus
 
         ModbusMessageParsingResult processFC15(uint8_t *tx_buf, size_t &tx_size)
         {
-            uint16_t coilStart = ParseUInt16BigEndian(rx_buf, 2);
+            uint16_t coilStart = ParseU16_BigEndian(rx_buf, 2);
             if (coilStart >= outputCoils->size())
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
-            uint16_t coilCount = ParseUInt16BigEndian(rx_buf, 4);
+            uint16_t coilCount = ParseU16_BigEndian(rx_buf, 4);
             if (coilStart + coilCount > outputCoils->size())
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
             uint8_t byteCount = rx_buf[6];
@@ -175,10 +176,10 @@ namespace modbus
         //Write Holding Registers
         ModbusMessageParsingResult processFC16(uint8_t *tx_buf, size_t &tx_size)
         {
-            uint16_t registerIndex = ParseUInt16BigEndian(rx_buf, 2);
+            uint16_t registerIndex = ParseU16_BigEndian(rx_buf, 2);
             if (registerIndex >= holdingRegisters->size())
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
-            uint16_t registerCount = ParseUInt16BigEndian(rx_buf, 4);
+            uint16_t registerCount = ParseU16_BigEndian(rx_buf, 4);
             if (registerIndex + registerCount > holdingRegisters->size())
                 return SendErrorMessageBack(tx_buf, tx_size, ModbusMessageParsingResult::OUT_OF_RANGE);
             uint8_t byteCount = rx_buf[6];
@@ -201,7 +202,7 @@ namespace modbus
             
             for (int reg = 0; reg < registerCount; reg++)
             {
-                uint16_t registerValue = ParseUInt16BigEndian(rx_buf, 7 + 2 * reg);
+                uint16_t registerValue = ParseU16_BigEndian(rx_buf, 7 + 2 * reg);
                 holdingRegisters->at(registerIndex + reg) = registerValue;
             }
             if (callbackAfterWrite)

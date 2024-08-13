@@ -6,14 +6,14 @@ namespace AHT
 {
      enum class ADDRESS
     {
-        default_address = 0x38,
+        DEFAULT_ADDRESS = 0x38,
         Low = 0x38,
         High = 0x39,
     };
  class M:public I2CSensor
   {
   public:                                                                              
-    M(i2c_master_bus_handle_t bus_handle,  AHT::ADDRESS slaveaddr = AHT::ADDRESS::default_address); 
+    M(i2c_master_bus_handle_t bus_handle,  AHT::ADDRESS slaveaddr = AHT::ADDRESS::DEFAULT_ADDRESS); 
     ErrorCode Initialize(int64_t& waitTillFirstTrigger) override;                                                                                                       
     ErrorCode Trigger(int64_t& waitTillReadout) override;
     ErrorCode Readout(int64_t& waitTillNExtTrigger)override;

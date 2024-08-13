@@ -37,7 +37,7 @@ namespace WIFISTA
         CONNECTED,
         NONE,
     };
-   
+   char* hostname{nullptr};
     esp_netif_t *wifi_netif_sta{nullptr};
     void (*_callbackOnSntpSet)(){nullptr};
 
@@ -85,7 +85,11 @@ namespace WIFISTA
         if(_callbackOnSntpSet) _callbackOnSntpSet();
     }
 
-    esp_err_t InitAndRun(const char* ssid, const char* password, bool init_netif_and_create_event_loop=true, void (*callbackOnSntpSet)()=nullptr)
+    const char* GetHostname(){
+        return hostname;
+    }
+
+    esp_err_t InitAndRun(const char* ssid, const char* password, const char *hostnamePattern="esp32_%02x%02x%02x", bool init_netif_and_create_event_loop=true, void (*callbackOnSntpSet)()=nullptr)
     {
         esp_log_level_set("wifi", ESP_LOG_WARN);
 
@@ -107,6 +111,18 @@ namespace WIFISTA
         wifi_config_t wifi_config_sta = {}; 
         strcpy((char *)wifi_config_sta.sta.ssid, ssid);
         strcpy((char *)wifi_config_sta.sta.password, password);
+
+
+        
+        uint8_t mac[6];
+        esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        asprintf(&hostname, hostnamePattern, mac[3], mac[4], mac[5]);
+        ESP_ERROR_CHECK(esp_netif_set_hostname(wifi_netif_sta, hostname));
+
+        ESP_ERROR_CHECK(mdns_init());
+        ESP_ERROR_CHECK(mdns_hostname_set(hostname));
+        const char* MDNS_INSTANCE="WEBMAN_MDNS_INSTANCE";
+        ESP_ERROR_CHECK(mdns_instance_name_set(MDNS_INSTANCE));
 
         ESP_LOGI(TAG, "about to connect to ssid %s with password %s.", wifi_config_sta.sta.ssid, wifi_config_sta.sta.password);
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));

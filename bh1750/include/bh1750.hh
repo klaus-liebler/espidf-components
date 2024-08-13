@@ -1,18 +1,17 @@
 #pragma once
 
-#include <stdio.h>
-#include "esp_log.h"
-#include "driver/i2c.h"
-#include "sdkconfig.h"
+#include <cstdint>
+#include <i2c_sensor.hh>
+#include <driver/i2c_master.h>
 
-
-enum class BH1750_ADRESS:uint8_t
+namespace BH1750{
+enum class ADDRESS:uint8_t
 {
     LOW=0x23,
     HIGH=0x5C,
 };
 
-enum class BH1750_OPERATIONMODE:uint8_t
+enum class OPERATIONMODE:uint8_t
 {
     
     CONTINU_H_RESOLUTION=0x10,
@@ -25,13 +24,18 @@ enum class BH1750_OPERATIONMODE:uint8_t
 };
 
 
-class BH1750{
+class M:public I2CSensor{
 private:
     i2c_port_t i2c_num;
-    BH1750_ADRESS adress;
+    ADDRESS address;
+    OPERATIONMODE operation;
+    uint16_t recentValueLux{0};
 public:
-    BH1750(const i2c_port_t i2c_num, BH1750_ADRESS adress);
-    ~BH1750();
-    esp_err_t Init(BH1750_OPERATIONMODE operation);
-    esp_err_t Read(uint16_t *lux);
+    M(i2c_master_bus_handle_t bus_handle, ADDRESS address, OPERATIONMODE operation);
+
+    ErrorCode Trigger(int64_t& waitTillReadout) override;
+    ErrorCode Readout(int64_t& waitTillNextTrigger) override;
+    ErrorCode Initialize(int64_t& waitTillFirstTrigger) override;
+    void Read(uint16_t &lux){lux=recentValueLux;}
 };
+}

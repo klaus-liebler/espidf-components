@@ -1,29 +1,25 @@
 #include "bh1750.hh"
-#include <i2c.hh>
 
-BH1750::BH1750(i2c_port_t i2c_num, BH1750_ADRESS adress):i2c_num(i2c_num), adress(adress)
-{
 
-}
-esp_err_t BH1750::Init(BH1750_OPERATIONMODE operation)
+BH1750::M::M(i2c_master_bus_handle_t bus_handle, ADDRESS address, OPERATIONMODE operation):I2CSensor(bus_handle, (uint8_t)address), operation(operation){}
+
+ErrorCode BH1750::M::Initialize(int64_t& waitTillFirstTrigger)
 {
+    waitTillFirstTrigger=100;
     uint8_t op = (uint8_t)operation;
-    return I2C::Write(i2c_num, (uint8_t)adress, &op, 1);
+    return Write8(&op, 1);
 
 }
-esp_err_t BH1750::Read(uint16_t *lux){
-    uint8_t sensor_data_h, sensor_data_l;
-    esp_err_t ret;
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, ((uint8_t)adress) << 1 | I2C_MASTER_READ, true);
-    i2c_master_read_byte(cmd, &sensor_data_h, I2C_MASTER_ACK);
-    i2c_master_read_byte(cmd, &sensor_data_l, I2C_MASTER_NACK);
-    i2c_master_stop(cmd);
-    ret = i2c_master_cmd_begin(i2c_num, cmd, pdMS_TO_TICKS(1000));
-    i2c_cmd_link_delete(cmd);
 
-    uint16_t val = ((sensor_data_h << 8 | sensor_data_l) / 1.2);
-    *lux=val;
-    return ret;
+ErrorCode BH1750::M::Trigger(int64_t& waitTillReadout){
+    waitTillReadout=100;
+    return ErrorCode::OK;
+}
+
+ErrorCode BH1750::M::Readout(int64_t& waitTillNextTrigger){
+    waitTillNextTrigger=100;
+    uint8_t sensor_data[2];
+    auto err=Read8(sensor_data, 2);
+    this->recentValueLux = ((sensor_data[0] << 8 | sensor_data[1]) / 1.2);
+    return err;
 }
