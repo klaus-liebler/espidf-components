@@ -161,7 +161,7 @@ namespace VL53L0X
     public:
         M(i2c_master_bus_handle_t bus_handle, I2C_ADDRESS address = I2C_ADDRESS::DEFAULT);
 
-        uint16_t ReadOut();
+        uint16_t ReadMillimeters();
     
         bool init(bool io_2v8 = true);
         bool setSignalRateLimit(float limit_Mcps);

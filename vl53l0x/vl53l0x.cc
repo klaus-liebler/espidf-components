@@ -49,7 +49,7 @@ namespace VL53L0X
         return last_status==0?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
     }
 
-    uint16_t M::ReadOut(){
+    uint16_t M::ReadMillimeters(){
         return this->lastMeasurementMillimeters;
     }
 

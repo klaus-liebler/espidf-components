@@ -57,7 +57,7 @@ esp_err_t cRotaryEncoder::Init()
         gpio_pullup_en(sw_gpio_num);
     }
 
-    pcnt_unit_config_t unit_config{minCount, maxCount,0};
+    pcnt_unit_config_t unit_config{minCount, maxCount,0, {0}};
     ESP_ERROR_CHECK(pcnt_new_unit(&unit_config, &pcnt_unit));
 
     pcnt_glitch_filter_config_t filter_config {1000};
