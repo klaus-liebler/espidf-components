@@ -129,6 +129,7 @@ constexpr uint64_t IO(int n)
         if (__err_rc != ErrorCode::OK)                                                                                \
         {                                                                                                             \
             ESP_LOGE(TAG, "Error %d occured in File %s in line %d in expression %s", (int)__err_rc, __FILE__, __LINE__, #x); \
+            abort();\
         }                                                                                                             \
     } while (0)
 

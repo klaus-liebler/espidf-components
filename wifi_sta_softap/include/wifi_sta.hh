@@ -37,7 +37,8 @@ namespace WIFISTA
         CONNECTED,
         NONE,
     };
-   char* hostname{nullptr};
+    esp_ip4_addr_t ipAddress{0};
+    char* hostname{nullptr};
     esp_netif_t *wifi_netif_sta{nullptr};
     void (*_callbackOnSntpSet)(){nullptr};
 
@@ -49,14 +50,14 @@ namespace WIFISTA
 
     static void ip_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
     {
-        ESP_LOGI(TAG, "IP Event %ld", event_id);
         switch (event_id)
         {
             case IP_EVENT_STA_GOT_IP:
             {
                 ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-                ESP_LOGI(TAG, "IP_EVENT_STA_GOT_IP: ip=" IPSTR " netmask=" IPSTR " gw=" IPSTR, IP2STR(&event->ip_info.ip), IP2STR(&event->ip_info.netmask), IP2STR(&event->ip_info.gw));
+                ESP_LOGI(TAG, "Got IP-Address" IPSTR, IP2STR(&event->ip_info.ip));
                 state=ConnectionState::CONNECTED;
+                ipAddress=event->ip_info.ip;
                 esp_sntp_init();
                 break;
             }
@@ -66,7 +67,7 @@ namespace WIFISTA
 
     static void wifi_event_handler(void *arg, esp_event_base_t event_base, int32_t event_id, void *event_data)
     {
-         ESP_LOGI(TAG, "WIFI Event %ld", event_id);
+         ESP_LOGD(TAG, "WIFI Event %ld", event_id);
          if (event_id == WIFI_EVENT_STA_START || event_id == WIFI_EVENT_STA_DISCONNECTED) {
             state=ConnectionState::CONNECTING;
             esp_wifi_connect();
@@ -81,12 +82,16 @@ namespace WIFISTA
         time(&now);
         localtime_r(&now, &timeinfo);
         strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo);
-        ESP_LOGI(TAG, "Notification of a time synchronization! The current date/time in Berlin is: %s", strftime_buf);
+        ESP_LOGI(TAG, "Real Time is available thanks to SNTP. The current date/time in Berlin is: %s", strftime_buf);
         if(_callbackOnSntpSet) _callbackOnSntpSet();
     }
 
     const char* GetHostname(){
         return hostname;
+    }
+
+    const esp_ip4_addr_t GetIpAddress(){
+        return ipAddress;
     }
 
     esp_err_t InitAndRun(const char* ssid, const char* password, const char *hostnamePattern="esp32_%02x%02x%02x", bool init_netif_and_create_event_loop=true, void (*callbackOnSntpSet)()=nullptr)

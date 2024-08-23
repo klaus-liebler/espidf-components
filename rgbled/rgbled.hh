@@ -1,6 +1,7 @@
 #pragma once
 #include <stdio.h>
 #include <string.h>
+#include <errorcodes.hh>
 #include <common.hh>
 #include <esp_log.h>
 #include <driver/spi_master.h>
@@ -87,10 +88,10 @@ namespace RGBLED
     public:
         M() {}
 
-        esp_err_t SetPixel(size_t index, CRGB color, bool refresh = false)
+        ErrorCode SetPixel(size_t index, CRGB color, bool refresh = false)
         {
             if (index >= LEDSIZE)
-                return ESP_FAIL;
+                return ErrorCode::INDEX_OUT_OF_BOUNDS;
             patterns[index] = nullptr;
             if ((this->table[index]) != (color.raw32))
             {
@@ -102,21 +103,21 @@ namespace RGBLED
             {
                 this->Refresh(1000, refresh);
             }
-            return ESP_OK;
+            return ErrorCode::OK;
         }
 
-        esp_err_t AnimatePixel(size_t index, AnimationPattern *pattern)
+        ErrorCode AnimatePixel(size_t index, AnimationPattern *pattern)
         {
             if (index >= LEDSIZE)
-                return ESP_FAIL; // TODO: RaceCondition: Set,Animate und Refresh müssen gegenseitig verriegelt werden...
+                return ErrorCode::INDEX_OUT_OF_BOUNDS; // TODO: RaceCondition: Set,Animate und Refresh müssen gegenseitig verriegelt werden...
             tms_t now = (esp_timer_get_time() / 1000);
             pattern->Reset(now);
             patterns[index] = pattern;
             table[index] = CRGB::TRANSPARENT;
-            return ESP_OK;
+            return ErrorCode::OK;
         }
 
-        esp_err_t Refresh(uint32_t timeout_ms = 1000, bool forceRefreshEvenIfNotNecessary = false)
+        ErrorCode Refresh(uint32_t timeout_ms = 1000, bool forceRefreshEvenIfNotNecessary = false)
         {
             uint32_t i;
             int n = 0;
@@ -134,7 +135,7 @@ namespace RGBLED
 
             if (!dirty && !forceRefreshEvenIfNotNecessary)
             {
-                return ESP_OK;
+                return ErrorCode::OK;
             }
             for (i = 0; i < LEDSIZE; i++)
             {
@@ -236,10 +237,10 @@ namespace RGBLED
             ESP_LOGD(TAG, "Refreshing RGB-LED");
             ESP_ERROR_CHECK(spi_device_transmit(this->spi_device_handle, &t));
             dirty = false;
-            return ESP_OK;
+            return ErrorCode::OK;
         }
 
-        esp_err_t Clear(uint32_t timeout_ms = 1000)
+        ErrorCode Clear(uint32_t timeout_ms = 1000)
         {
             CRGB black = CRGB::Black;
             memset(table, black.raw32, LEDSIZE * sizeof(uint32_t));
@@ -248,7 +249,7 @@ namespace RGBLED
             return Refresh(timeout_ms);
         }
 
-        esp_err_t Begin(const spi_host_device_t spi_host, const gpio_num_t gpio, const spi_dma_chan_t dma_channel=SPI_DMA_CH_AUTO)
+        ErrorCode Begin(const spi_host_device_t spi_host, const gpio_num_t gpio, const spi_dma_chan_t dma_channel=SPI_DMA_CH_AUTO)
         {
             spi_bus_config_t bus_config = {};
             bus_config.miso_io_num = GPIO_NUM_NC;
@@ -280,11 +281,11 @@ namespace RGBLED
             if (this->buffer == NULL)
             {
                 ESP_LOGE(TAG, "LED DMA Buffer can not be allocated");
-                return ESP_FAIL;
+                return ErrorCode::GENERIC_ERROR;
             }
             memset(this->buffer, 0, LED_DMA_BUFFER_SIZE);
             Clear(1000);
-            return ESP_OK;
+            return ErrorCode::OK;
         }
     };
 }
