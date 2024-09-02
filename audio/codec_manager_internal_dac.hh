@@ -5,7 +5,7 @@
 
 #include "driver/dac_continuous.h"
 namespace CodecManager{
-	class InternalDacWithPotentiometer : public CodecManagerInterface
+	class InternalDacWithPotentiometer : public iCodecManager
     {
     private:
         uint32_t currentSampleRateHz{24000};
@@ -49,21 +49,17 @@ namespace CodecManager{
             return ErrorCode::OK;
         }
 
-        ErrorCode WriteAudioData(AudioFormat format, size_t samples, void *buf) override
+        ErrorCode WriteAudioData(eChannels ch, eSampleBits bits, uint32_t sampleRateHz, size_t samples, void *buf) override
         {
             // Needs Mono, 8bit
             size_t dummy;
             uint8_t newBuf[samples];
-            switch (format)
-            {
-            case AudioFormat::Mono_8bit:
-            {
+            
+            if(ch==eChannels::ONE && bits==eSampleBits::EIGHT){
                 uint8_t *origBuf = (uint8_t *)buf;
                 ESP_ERROR_CHECK(dac_continuous_write(dac_handle, origBuf, samples, &dummy, -1));
             }
-            break;
-            case AudioFormat::Mono_16bit:
-            {
+            else if(ch==eChannels::ONE && bits==eSampleBits::SIXTEEN){
                 int16_t *origBuf = (int16_t *)buf;
                 int16_t max{INT16_MIN};
                 uint8_t maxU8{0};
@@ -95,9 +91,7 @@ namespace CodecManager{
                 ESP_LOGD(TAG, "max=%d, min=%d, maxU8=%d, minU8=%d", max, min, maxU8, minU8);
                 ESP_ERROR_CHECK(dac_continuous_write(dac_handle, newBuf, samples, &dummy, -1));
             }
-            break;
-            case AudioFormat::Stereo_16bit:
-            {
+            else if(ch==eChannels::TWO && bits==eSampleBits::SIXTEEN){
                 int16_t *origBuf = (int16_t *)buf;
                 int16_t max{INT16_MIN};
                 uint8_t maxU8{0};
@@ -123,10 +117,7 @@ namespace CodecManager{
                 ESP_LOGI(TAG, "max=%d, min=%d, maxU8=%d, minU8=%d", max, min, maxU8, minU8);
                 ESP_ERROR_CHECK(dac_continuous_write(dac_handle, newBuf, samples, &dummy, -1));
             }
-            break;
-            default:
-                break;
-            }
+           
             return ErrorCode::OK;
         }
     };

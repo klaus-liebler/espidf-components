@@ -26,6 +26,7 @@
 #include <spi_flash_mmap.h>
 #include <esp_sntp.h>
 #include <time.h>
+#include <mdns.h>
 
 #define TAG "WIFISTA"
 
@@ -39,6 +40,7 @@ namespace WIFISTA
     };
     esp_ip4_addr_t ipAddress{0};
     char* hostname{nullptr};
+    char ssid_[32];
     esp_netif_t *wifi_netif_sta{nullptr};
     void (*_callbackOnSntpSet)(){nullptr};
 
@@ -90,6 +92,10 @@ namespace WIFISTA
         return hostname;
     }
 
+    const char* GetSsid(){
+        return ssid_;
+    }
+
     const esp_ip4_addr_t GetIpAddress(){
         return ipAddress;
     }
@@ -114,8 +120,9 @@ namespace WIFISTA
         ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL, NULL));
 
         wifi_config_t wifi_config_sta = {}; 
-        strcpy((char *)wifi_config_sta.sta.ssid, ssid);
-        strcpy((char *)wifi_config_sta.sta.password, password);
+        strncpy((char *)wifi_config_sta.sta.ssid, ssid, sizeof(wifi_config_sta.sta.ssid));
+        strncpy(ssid_, ssid, sizeof(ssid_));
+        strncpy((char *)wifi_config_sta.sta.password, password, sizeof(wifi_config_sta.sta.password));
 
 
         

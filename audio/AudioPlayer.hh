@@ -63,7 +63,7 @@ namespace AudioPlayer
     {
     private:
         QueueHandle_t orderQueue{nullptr};
-        CodecManager::CodecManagerInterface* codecManager{nullptr};
+        CodecManager::iCodecManager* codecManager{nullptr};
         mp3dec_t *decoder;
         int32_t frameStart{0};
         int16_t *outBuffer{nullptr};
@@ -83,7 +83,7 @@ namespace AudioPlayer
 
 
         esp_err_t LoopPCM(){
-            codecManager->WriteAudioData(CodecManager::AudioFormat::Stereo_16bit, currentOrder.fileLen/4, (void*)currentOrder.file);//TODO AudioFormat!
+            codecManager->WriteAudioData(CodecManager::eChannels::TWO, CodecManager::eSampleBits::SIXTEEN, 44100, currentOrder.fileLen/4, (void*)currentOrder.file);//TODO AudioFormat!
            
  
             currentOrder=SILENCE_ORDER;
@@ -104,15 +104,8 @@ namespace AudioPlayer
             int samples = mp3dec_decode_frame(decoder, currentOrder.file + frameStart, bytesLeft, this->outBuffer, &info);
             this->frameStart += info.frame_bytes;
             if (samples == 0){return ESP_OK;}
-
-            codecManager->SetSampleRate(info.hz);
-            CodecManager::AudioFormat format =info.channels==1?CodecManager::AudioFormat::Mono_16bit:CodecManager::AudioFormat::Stereo_16bit;
-
- 
             ESP_LOGD(TAG, "ch=%d, hz=%d, samples=%d", info.channels, info.hz, samples);
-            
-            codecManager->WriteAudioData(format, samples, outBuffer);
-
+            codecManager->WriteAudioData((CodecManager::eChannels)info.channels, CodecManager::eSampleBits::SIXTEEN, info.hz,samples, outBuffer);
             return ESP_OK;
         }
 
@@ -134,7 +127,6 @@ namespace AudioPlayer
 
         esp_err_t InitPCM(){
             frameStart=0;
-            codecManager->SetSampleRate(currentOrder.sampleRate);
             codecManager->SetPowerState(true);
             if(currentOrder.volume!=0){
                 codecManager->SetVolume(currentOrder.volume);
@@ -230,9 +222,9 @@ namespace AudioPlayer
             return codecManager->Init();
         }
 
-        Player(CodecManager::CodecManagerInterface* codecManager)
+        Player(CodecManager::iCodecManager* codecManager)
         {
-            this->outBuffer = new int16_t[2 * MP3::SAMPLES_PER_FRAME];
+            this->outBuffer = new int16_t[2 * MP3::SAMPLES_PER_FRAME];//FIXME: Ist die zwei hier überflüssig??? Diese Grenze von 1152 sind schon 2*576 Mono-Samples und die Datenstruktur ist ja auch schon i16!
             this->decoder = new mp3dec_t();
             this->orderQueue = xQueueCreate(1,sizeof(AudioOrder));
             this->codecManager=codecManager;
