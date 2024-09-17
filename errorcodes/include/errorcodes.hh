@@ -36,5 +36,6 @@ enum class ErrorCode:int
     HEALTH_WARNING,
     HEALTH_ERROR,
     DATA_FORMAT_ERROR,
+    UNKNOWN_HARDWARE_ID,
     
 };
