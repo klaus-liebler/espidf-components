@@ -32,6 +32,9 @@ namespace AudioPlayer
 {
     namespace MP3{
         constexpr size_t SAMPLES_PER_FRAME = 1152;
+        constexpr size_t CHANNELS_PER_SAMPLE = 2;
+        constexpr size_t FRAMES_IN_BUFFER = 4;
+
         constexpr size_t FRAME_MAX_SIZE_BYTES = 1024;
         constexpr size_t HEADER_LENGTH_BYTES = 4;
         constexpr uint8_t SYNCWORDH = 0xff;
@@ -82,39 +85,45 @@ namespace AudioPlayer
 
 
 
-        esp_err_t LoopPCM(){
+        ErrorCode LoopPCM(){
             codecManager->WriteAudioData(CodecManager::eChannels::TWO, CodecManager::eSampleBits::SIXTEEN, 44100, currentOrder.fileLen/4, (void*)currentOrder.file);//TODO AudioFormat!
-           
- 
             currentOrder=SILENCE_ORDER;
-            return ESP_OK;
+            return ErrorCode::OK;
         }
 
 
         
-        esp_err_t LoopMP3(){
+        ErrorCode LoopMP3(){
             if (frameStart >= currentOrder.fileLen)
             {
                 ESP_LOGI(TAG, "Reached End of MP3 File.");
                 currentOrder=SILENCE_ORDER;
-                return ESP_OK;
+                return ErrorCode::OK;
             }
-            int bytesLeft = currentOrder.fileLen - frameStart;
+            int samples{0};
+            int16_t* buf=this->outBuffer;
             mp3dec_frame_info_t info = {};
-            int samples = mp3dec_decode_frame(decoder, currentOrder.file + frameStart, bytesLeft, this->outBuffer, &info);
-            this->frameStart += info.frame_bytes;
-            if (samples == 0){return ESP_OK;}
+            //Bei Samplerate >24000..48000: 1152 Samples/Frame, sonst 576
+            //-->Ein Frame dauert maximal 24ms
+            //-->Decodiere immer 4 Frames, damit wir knapp 100ms überbrücken können
+            for(int i=0;i<MP3::FRAMES_IN_BUFFER;i++){
+                int bytesLeft = currentOrder.fileLen - frameStart;
+                samples += mp3dec_decode_frame(decoder, currentOrder.file + frameStart, bytesLeft, buf, &info);
+                this->frameStart += info.frame_bytes;
+                if(samples==0) break;
+                buf=this->outBuffer+(samples*info.channels); //kein "+=", weil ja die samples bereits summiert werden!
+            }
+            if (samples == 0){return ErrorCode::OK;}
             ESP_LOGD(TAG, "ch=%d, hz=%d, samples=%d", info.channels, info.hz, samples);
-            codecManager->WriteAudioData((CodecManager::eChannels)info.channels, CodecManager::eSampleBits::SIXTEEN, info.hz,samples, outBuffer);
-            return ESP_OK;
+            return codecManager->WriteAudioData((CodecManager::eChannels)info.channels, CodecManager::eSampleBits::SIXTEEN, info.hz,samples, outBuffer);
         }
 
-        esp_err_t InitMP3(){
+        ErrorCode InitMP3(){
             frameStart = FindSyncWordOnAnyPosition(currentOrder.file, currentOrder.fileLen, 0);
             if (frameStart < 0)
             {
                 ESP_LOGE(TAG, "No synch word found in file!");
-                return ESP_FAIL;
+                return ErrorCode::DATA_FORMAT_ERROR;
             }
             mp3dec_init(decoder);
             codecManager->SetPowerState(true);
@@ -122,7 +131,7 @@ namespace AudioPlayer
                 codecManager->SetVolume(currentOrder.volume);
             }
             ESP_LOGI(TAG, "Successfully initialized a new MP3 sound play task. File=%p; FileLen=%zu; FrameStart=%ld;", currentOrder.file, currentOrder.fileLen, frameStart);
-            return ESP_OK;
+            return ErrorCode::OK;
         }
 
         esp_err_t InitPCM(){
@@ -168,25 +177,22 @@ namespace AudioPlayer
             return ESP_OK;
         }
 
-        esp_err_t Stop()
+        ErrorCode Stop()
         {
-            if(!orderQueue) return ESP_FAIL;
+            if(!orderQueue) return ErrorCode::NOT_YET_INITIALIZED;
             xQueueOverwrite(orderQueue, &SILENCE_ORDER);
-            return ESP_OK;
+            return ErrorCode::OK;
         }
 
  
-        esp_err_t Loop(){
-            if(!orderQueue){
-                vTaskDelay(pdMS_TO_TICKS(50));
-                return ESP_FAIL;
-            }
+        ErrorCode Loop(){
+            if(!orderQueue) return ErrorCode::NOT_YET_INITIALIZED;
             AudioOrder temp;
             if(currentOrder.type==AudioType::SILENCE || (xQueuePeek(orderQueue, &temp, 0) && temp.cancelPrevious)){
                 if(xQueueReceive(orderQueue, &currentOrder, 0)){
                     switch (currentOrder.type){
                         case AudioType::MP3:
-                            if(InitMP3()!=ESP_OK){
+                            if(InitMP3()!=ErrorCode::OK){
                                 currentOrder=SILENCE_ORDER;
                                 InitSilence();
                             }
@@ -208,13 +214,10 @@ namespace AudioPlayer
             {
             case AudioType::MP3:
                 return LoopMP3();
-                break;
             case AudioType::PCM:
                 return LoopPCM();
-                break;
             default:
-                vTaskDelay(pdMS_TO_TICKS(50));
-                return ESP_OK;
+                return ErrorCode::OK;
             }
         }
 
@@ -224,7 +227,7 @@ namespace AudioPlayer
 
         Player(CodecManager::iCodecManager* codecManager)
         {
-            this->outBuffer = new int16_t[2 * MP3::SAMPLES_PER_FRAME];//FIXME: Ist die zwei hier überflüssig??? Diese Grenze von 1152 sind schon 2*576 Mono-Samples und die Datenstruktur ist ja auch schon i16!
+            this->outBuffer = new int16_t[MP3::CHANNELS_PER_SAMPLE * MP3::FRAMES_IN_BUFFER * MP3::SAMPLES_PER_FRAME];
             this->decoder = new mp3dec_t();
             this->orderQueue = xQueueCreate(1,sizeof(AudioOrder));
             this->codecManager=codecManager;

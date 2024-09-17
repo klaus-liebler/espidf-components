@@ -249,7 +249,7 @@ int16_t ParseI16_BigEndian(const uint8_t *const buffer, uint32_t offset)
 	return step;
 }
 
-void WriteU16_BigEndian(uint16_t value, uint8_t *buffer, size_t offset)
+void WriteU16_BigEndian(uint16_t value, uint8_t * buffer, uint32_t offset)
 {
 	uint8_t *ptr1 = (uint8_t *)&value;
 	uint8_t *ptr2 = ptr1 + 1;
@@ -257,7 +257,7 @@ void WriteU16_BigEndian(uint16_t value, uint8_t *buffer, size_t offset)
 	*(buffer + offset + 1) = *ptr1;
 }
 
-void WriteU32_BigEndian(uint32_t value, uint8_t *buffer, size_t offset)
+void WriteU32_BigEndian(uint32_t value, uint8_t *buffer, uint32_t offset)
 {
 	uint8_t *ptr1 = (uint8_t *)&value;
 	uint8_t *ptr2 = ptr1 + 1;
@@ -269,7 +269,7 @@ void WriteU32_BigEndian(uint32_t value, uint8_t *buffer, size_t offset)
 	*(buffer + offset + 3) = *ptr1;
 }
 
-uint16_t ParseU16_BigEndian(const uint8_t *const buffer, size_t offset)
+uint16_t ParseU16_BigEndian(const uint8_t *const buffer, uint32_t offset)
 {
 	uint16_t step;
 	uint8_t *ptr1 = (uint8_t *)&step;
@@ -279,7 +279,7 @@ uint16_t ParseU16_BigEndian(const uint8_t *const buffer, size_t offset)
 	return step;
 }
 
-uint32_t ParseU32_BE(const uint8_t *const buffer, size_t offset)
+uint32_t ParseU32_BigEndian(const uint8_t *const buffer, uint32_t offset)
 {
 	uint32_t step;
 	uint8_t *ptr1 = (uint8_t *)&step;

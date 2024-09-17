@@ -41,6 +41,8 @@ class I2CSensor{
             return i2c_master_probe(bus_handle, dev_addr, 1000)==ESP_OK?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
         }
 
+        
+
         ErrorCode WriteRegs8(uint8_t reg_addr, const uint8_t *reg_data, size_t data_len){
             ESP_RETURN_ON_FALSE(dev_handle, ErrorCode::GENERIC_ERROR, TAG, "dev_handle is null");
             uint8_t buf[1+data_len];
@@ -69,6 +71,10 @@ class I2CSensor{
     virtual bool HasValidData(){
         
         return state == STATE::READOUT || state == STATE::RETRIGGERED;
+    }
+
+    STATE GetState(){
+        return state;
     }
 
     ErrorCode Loop(int64_t currentMs){

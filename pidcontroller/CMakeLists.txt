@@ -1,5 +1,5 @@
 idf_component_register(
-    SRCS "pidcontroller.cc"
+    SRCS
     INCLUDE_DIRS "include"
     REQUIRES "errorcodes"
 )

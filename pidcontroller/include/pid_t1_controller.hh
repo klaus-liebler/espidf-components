@@ -1,6 +1,6 @@
 #pragma once
 
-#include <inttypes.h>
+#include <cinttypes>
 #include <errorcodes.hh>
 #include <cmath>
 #include "esp_log.h"
@@ -47,7 +47,7 @@ namespace PID_T1
     }
     ErrorCode Compute(int64_t nowMs)
     {
-      uint32_t timeChangeMs = (nowMs - lastTimeMs);
+      int64_t timeChangeMs = (nowMs - lastTimeMs);
       if (timeChangeMs < cycleTimeMs)
         return ErrorCode::OBJECT_NOT_CHANGED;
 
@@ -67,37 +67,36 @@ namespace PID_T1
       T y_0{0};
       if (antiWindup == AntiWindup::ON_SWICH_OFF_INTEGRATOR)
       {
-        if (y_1 >= outputMax || y_1 <= outputMin)
+        if (y_1 >= outputMax-workingPointOffset || y_1 <= outputMin-workingPointOffset)
         {
-          y_0 = -a1 * y_1 - a2 * y_2 + b0_windup * e_0 + b1_windup * e_1 + b2_windup * e_2;
-          y_0 = std::min(y_0, outputMax);
-          y_0 = std::max(y_0, outputMin);
-          *this->output = y_0;
-          ESP_LOGI(TAG, "Error = %F, Raw Output %F, Output %F (in windup)", e_0, y_0, *this->output);
+          T raw_y_0 = -a1 * y_1 - a2 * y_2 + b0_windup * e_0 + b1_windup * e_1 + b2_windup * e_2;
+          y_0 = std::clamp(raw_y_0, outputMin-workingPointOffset, outputMax-workingPointOffset);
+          *this->output = y_0+workingPointOffset;
+          ESP_LOGI(TAG, "Error = %F, Raw Output %F, Limited Output %F (in windup %f<%f<%f)", e_0, raw_y_0, y_0, outputMin-workingPointOffset, y_1, outputMax-workingPointOffset);
         }
         else
         {
-          y_0 = -a1 * y_1 - a2 * y_2 + b0 * e_0 + b1 * e_1 + b2 * e_2;
-          y_0 = std::min(y_0, outputMax);
-          y_0 = std::max(y_0, outputMin);
-          *this->output = y_0;
-          ESP_LOGI(TAG, "Error = %F, Raw Output %F, Output %F (no windup)", e_0, y_0, *this->output);
+          T raw_y_0 = -a1 * y_1 - a2 * y_2 + b0 * e_0 + b1 * e_1 + b2 * e_2;
+          y_0 = std::clamp(raw_y_0, outputMin-workingPointOffset, outputMax-workingPointOffset);
+          *this->output = y_0+workingPointOffset;
+          ESP_LOGI(TAG, "Error = %.1F, Raw Output %.1F, LimitedOutput %.1F (no windup %.1f<%.1f<%.1f)", e_0, raw_y_0, y_0, outputMin-workingPointOffset, y_1, outputMax-workingPointOffset);
         }
       }
       else if (antiWindup == AntiWindup::ON_LIMIT_Y_0)
       {
         // do anti windup by limiting y_0
         y_0 = -a1 * y_1 - a2 * y_2 + b0 * e_0 + b1 * e_1 + b2 * e_2;
-        y_0 = std::min(y_0, outputMax);
-        y_0 = std::max(y_0, outputMin);
-        *this->output = y_0;
+        y_0 = std::min(y_0, outputMax-workingPointOffset);
+        y_0 = std::max(y_0, outputMin+workingPointOffset);
+        *this->output = y_0+workingPointOffset;
       }
       else
       {
         // limit output without affecting y_0
         y_0 = -a1 * y_1 - a2 * y_2 + b0 * e_0 + b1 * e_1 + b2 * e_2;
-        *this->output = std::min(y_0, outputMax);
-        *this->output = std::max(y_0, outputMin);
+        y_0 = std::min(y_0, outputMax-workingPointOffset);
+        y_0 = std::max(y_0, outputMin+workingPointOffset);
+        *this->output = y_0+workingPointOffset;
       }
 
       y_2 = y_1;
@@ -107,13 +106,20 @@ namespace PID_T1
       lastTimeMs = nowMs;
       return ErrorCode::OK;
     }
+
+    ErrorCode SetWorkingPointOffset(T workingPointOffset){
+      this->workingPointOffset=workingPointOffset;
+      return ErrorCode::OK;
+    }
+
     ErrorCode SetMode(Mode nextMode, int64_t nowMs)
     {
       if (this->mode == nextMode)
         return ErrorCode::OBJECT_NOT_CHANGED;
       if (nextMode == Mode::CLOSEDLOOP)
       {
-        y_1 = y_2 = e_2 = e_1 = 0;
+        ESP_LOGI(TAG, "Switching from Mode %d to %d", (int)this->mode, (int)nextMode);
+        Reset();
         this->lastTimeMs = nowMs;
       }
       this->mode = nextMode;
@@ -157,6 +163,7 @@ namespace PID_T1
     ErrorCode Reset()
     {
       y_1 = y_2 = e_1 = e_2 = 0;
+      ESP_LOGD(TAG, "PID-Controller has been resetted to zero values");
       return ErrorCode::OK;
     }
 
@@ -178,12 +185,12 @@ namespace PID_T1
     T y_2;
     T e_1;
     T e_2;
-
+    T workingPointOffset;
     T kpAsSetByUser = 0.0;
     int64_t tnAsSetByUser = INT64_MAX;
     int64_t tvAsSetByUser = 0;
 
-    T outputMin, outputMax;
+    T outputMin, outputMax; //absolute values. eg.: a Fan has 0...100% power. Working point does not matter.
 
     Mode mode;
     AntiWindup antiWindup;

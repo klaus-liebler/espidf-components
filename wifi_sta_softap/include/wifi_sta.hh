@@ -57,7 +57,7 @@ namespace WIFISTA
             case IP_EVENT_STA_GOT_IP:
             {
                 ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-                ESP_LOGI(TAG, "Got IP-Address" IPSTR, IP2STR(&event->ip_info.ip));
+                ESP_LOGI(TAG, "Host %s got IP address " IPSTR, hostname, IP2STR(&event->ip_info.ip));
                 state=ConnectionState::CONNECTED;
                 ipAddress=event->ip_info.ip;
                 esp_sntp_init();

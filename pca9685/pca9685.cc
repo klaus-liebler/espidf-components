@@ -158,7 +158,7 @@ namespace PCA9685
 		if (this->i2cPort == 0)
 		{
 			ESP_LOGE(TAG, "i2c device is null");
-			return ErrorCode::HARDWARE_NOT_INITIALIZED;
+			return ErrorCode::NOT_YET_INITIALIZED;
 		}
 		uint8_t data = 0xF0;
 		// 07,4 on, 09,4 full off
@@ -178,7 +178,7 @@ namespace PCA9685
 		if (this->i2cPort == 0)
 		{
 			//ESP_LOGE(TAG, "i2c device is null");
-			return ErrorCode::HARDWARE_NOT_INITIALIZED;
+			return ErrorCode::NOT_YET_INITIALIZED;
 		}
 		// Optional: PCA9685_I2C_SlaveAtAddress(Address), might make things slower
 		uint8_t data[4] = {(uint8_t)(OnValue & 0xFF), (uint8_t)((OnValue >> 8) & 0x1F), (uint8_t)(OffValue & 0xFF), (uint8_t)((OffValue >> 8) & 0x1F)};
@@ -197,7 +197,7 @@ namespace PCA9685
 		if (this->i2cPort == 0)
 		{
 			//ESP_LOGE(TAG, "i2c device is null");
-			return ErrorCode::HARDWARE_NOT_INITIALIZED;
+			return ErrorCode::NOT_YET_INITIALIZED;
 		}
 		uint16_t offValue;
 		uint16_t onValue;
