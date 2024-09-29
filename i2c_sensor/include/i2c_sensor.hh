@@ -41,7 +41,13 @@ class I2CSensor{
             return i2c_master_probe(bus_handle, dev_addr, 1000)==ESP_OK?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
         }
 
-        
+        ErrorCode WriteReg8(uint8_t reg_addr, const uint8_t reg_data){
+            ESP_RETURN_ON_FALSE(dev_handle, ErrorCode::GENERIC_ERROR, TAG, "dev_handle is null");
+            uint8_t buf[1+1];
+            buf[0]=reg_addr;
+            buf[1]=reg_data;
+            return i2c_master_transmit(dev_handle, buf, 1+1, 1000)==ESP_OK?ErrorCode::OK:ErrorCode::GENERIC_ERROR;
+        }
 
         ErrorCode WriteRegs8(uint8_t reg_addr, const uint8_t *reg_data, size_t data_len){
             ESP_RETURN_ON_FALSE(dev_handle, ErrorCode::GENERIC_ERROR, TAG, "dev_handle is null");

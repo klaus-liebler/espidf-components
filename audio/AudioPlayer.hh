@@ -115,7 +115,13 @@ namespace AudioPlayer
             }
             if (samples == 0){return ErrorCode::OK;}
             ESP_LOGD(TAG, "ch=%d, hz=%d, samples=%d", info.channels, info.hz, samples);
-            return codecManager->WriteAudioData((CodecManager::eChannels)info.channels, CodecManager::eSampleBits::SIXTEEN, info.hz,samples, outBuffer);
+            auto before = esp_timer_get_time();
+            auto err = codecManager->WriteAudioData((CodecManager::eChannels)info.channels, CodecManager::eSampleBits::SIXTEEN, info.hz,samples, outBuffer);
+            auto duration = esp_timer_get_time()-before;
+            if(duration<1000){
+                ESP_LOGW(TAG, "codecManager->WriteAudioData block shorter than 1000us. This means, buffer was already empty -->broken audio --> check task config!");
+            }
+            return err;
         }
 
         ErrorCode InitMP3(){
