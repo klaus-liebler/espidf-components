@@ -100,8 +100,12 @@ namespace OneWire
         }
 
        
-        float GetTemperature(){
+        float GetTemperature() const{
             return this->lastTemperature;
+        }
+
+        onewire_device_address_t GetAddress() const{
+            return this->addr;
         }
        
         esp_err_t UpdateTemperature(onewire_bus_handle_t bus)
@@ -145,6 +149,17 @@ namespace OneWire
             }
             TriggerTemperatureConversionForAll();
             nextReadoutMs=nowMs+800;
+        }
+
+        void FormatJSON(char* buffer, size_t remainingBufLen){
+            size_t j=0;
+            j = snprintf(buffer, remainingBufLen-j, "{[");
+            for (size_t i = 0; i < ds18b20_vect.size(); i++)
+            {
+                const Ds18B20 * x=ds18b20_vect.at(i);
+                j += snprintf(buffer+j, remainingBufLen-j, "{addr:%" PRIx64 ", temp:%.2f},\n", x->GetAddress(), x->GetTemperature());
+            }
+            remainingBufLen-=snprintf(buffer, remainingBufLen-j, "]}");
         }
 
         float GetMostRecentTemp(size_t index){

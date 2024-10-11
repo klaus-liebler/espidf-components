@@ -5,6 +5,11 @@
 #include <cstring>
 #include <bit>
 #include <algorithm>
+#include <sdkconfig.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
+#include <errorcodes.hh>
+#include <common-esp32.hh>
 
 #include <driver/i2s_std.h>
 #include <driver/i2c_master.h>
@@ -135,7 +140,8 @@ namespace nau88c22
             gpio_num_t bck,
             gpio_num_t ws,
             gpio_num_t data,
-            uint8_t initialVolume = 127) : bus_handle(bus_handle), mclk(mclk), bck(bck), ws(ws), data(data), volumeSpeakers(initialVolume)
+            uint8_t initialVolume = 127,
+            uint32_t initialSampleRateHz=44100) : I2sWithHardwareVolume(initialSampleRateHz), bus_handle(bus_handle), mclk(mclk), bck(bck), ws(ws), data(data), volumeSpeakers(initialVolume)
         {
         }
 

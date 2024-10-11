@@ -1,6 +1,7 @@
 #pragma once
 #include <cstdint>
 #include <errorcodes.hh>
+#include <common.hh>
 #define TAG "CODEC"
 
 namespace CodecManager
@@ -20,9 +21,7 @@ namespace CodecManager
     {
 
     protected:
-        uint32_t currentSampleRateHz{44100};
-        eChannels currentChannels{eChannels::TWO};
-        eSampleBits currentSampleBits{eSampleBits::SIXTEEN};
+
         uint8_t gainF2P6{1 << 6};
         void SetGain(float gain_0to4)
         {
@@ -93,11 +92,28 @@ namespace CodecManager
         
 
     protected:
+
+        I2sWithHardwareVolume(uint32_t initialSampleRateHz=44100, eChannels initialChannels=eChannels::TWO, eSampleBits initialSampleBits=eSampleBits::SIXTEEN):
+            currentSampleRateHz(initialSampleRateHz),
+            currentChannels(initialChannels),
+            currentSampleBits(initialSampleBits)
+        {
+
+        }
+
+        uint32_t currentSampleRateHz{44100};
+        eChannels currentChannels{eChannels::TWO};
+        eSampleBits currentSampleBits{eSampleBits::SIXTEEN};
+
         ErrorCode SetSampleRate(uint32_t sampleRateHz) override
         {
+            if(sampleRateHz==currentSampleRateHz){
+                return ErrorCode::OK;
+            }
+            currentSampleRateHz=sampleRateHz;
             ESP_LOGI(TAG, "Change sample rate to %ld Hz", currentSampleRateHz);
             i2s_std_clk_config_t clk_cfg ={};//this produces warning! I2S_STD_CLK_DEFAULT_CONFIG((uint32_t)sampleRateHz);
-            clk_cfg.sample_rate_hz = sampleRateHz;
+            clk_cfg.sample_rate_hz = currentSampleRateHz;
             clk_cfg.clk_src = I2S_CLK_SRC_DEFAULT;
             clk_cfg.mclk_multiple = I2S_MCLK_MULTIPLE_256;
             ESP_ERROR_CHECK(i2s_channel_disable(tx_handle));
