@@ -151,15 +151,22 @@ namespace OneWire
             nextReadoutMs=nowMs+800;
         }
 
-        void FormatJSON(char* buffer, size_t remainingBufLen){
+        void FormatJSON(char* buffer, size_t& maxLenInput_usedLen_Output){
             size_t j=0;
-            j = snprintf(buffer, remainingBufLen-j, "{[");
-            for (size_t i = 0; i < ds18b20_vect.size(); i++)
+            j += snprintf(buffer, maxLenInput_usedLen_Output-j, "{\"ds18b20\":[");
+            if(ds18b20_vect.size()>0){
+                const Ds18B20 * x=ds18b20_vect.at(0);
+                //without trailing comma
+                j += snprintf(buffer+j, maxLenInput_usedLen_Output-j, "{\"addr\":\"0x%016" PRIx64 "\", \"temp\":%.2f}", x->GetAddress(), x->GetTemperature());
+            }
+            for (size_t i = 1; i < ds18b20_vect.size(); i++)
             {
                 const Ds18B20 * x=ds18b20_vect.at(i);
-                j += snprintf(buffer+j, remainingBufLen-j, "{addr:%" PRIx64 ", temp:%.2f},\n", x->GetAddress(), x->GetTemperature());
+                //with comma as first character -->avoids trailing comma
+                j += snprintf(buffer+j, maxLenInput_usedLen_Output-j, ",{\"addr\":\"0x%016" PRIx64 "\", \"temp\":%.2f}", x->GetAddress(), x->GetTemperature());
             }
-            remainingBufLen-=snprintf(buffer, remainingBufLen-j, "]}");
+            j +=snprintf(buffer+j, maxLenInput_usedLen_Output-j, "]}");
+            maxLenInput_usedLen_Output=j;
         }
 
         float GetMostRecentTemp(size_t index){
@@ -229,7 +236,7 @@ namespace OneWire
                     ESP_LOGI(TAG, "Found an unknown device, address: %016llX", next_onewire_device.address);
                     continue;
                 }
-                ESP_LOGI(TAG, "Found a DS18B20[%d], address: %016llX", ds18b20_vect.size(), next_onewire_device.address);
+                ESP_LOGI(TAG, "Found a DS18B20[%d], address: %016" PRIx64 , ds18b20_vect.size(), next_onewire_device.address);
                 ds18b20_vect.push_back(device);
             }
             ESP_ERROR_CHECK(onewire_del_device_iter(iter));

@@ -83,6 +83,34 @@ class I2CSensor{
         return state;
     }
 
+    ErrorCode MakeDeviceReady_Blocking(int64_t currentMs){
+        if(i2c_master_probe(bus_handle, this->address_7bit, 1000)!=ESP_OK){
+            state = STATE::ERROR_NOT_FOUND;
+            ESP_LOGD(TAG, "state = STATE::ERROR_NOT_FOUND; return ErrorCode::DEVICE_NOT_RESPONDING");
+            return ErrorCode::DEVICE_NOT_RESPONDING;
+        }
+        
+        i2c_device_config_t dev_cfg = {
+            .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+            .device_address = address_7bit,
+            .scl_speed_hz = 100000,
+            .scl_wait_us=0,
+            .flags=0,
+        };
+        ESP_ERROR_CHECK(i2c_master_bus_add_device(this->bus_handle, &dev_cfg, &(this->dev_handle)));
+        int64_t wait;
+        auto e=Initialize(wait);
+        if(e!=ErrorCode::OK){
+            state = STATE::ERROR_COMMUNICATION;
+            ESP_LOGD(TAG, "state = STATE::ERROR_COMMUNICATION; return ErrorCode::DEVICE_NOT_RESPONDING");
+            return ErrorCode::DEVICE_NOT_RESPONDING;
+        }
+        
+        nextAction=currentMs+wait;
+        state=STATE::INITIALIZED;
+        return ErrorCode::OK;
+    }
+
     ErrorCode Loop(int64_t currentMs){
         if(currentMs<nextAction) return ErrorCode::OK;
         ErrorCode e;
