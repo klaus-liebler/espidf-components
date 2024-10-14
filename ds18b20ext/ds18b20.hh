@@ -151,22 +151,22 @@ namespace OneWire
             nextReadoutMs=nowMs+800;
         }
 
-        void FormatJSON(char* buffer, size_t& maxLenInput_usedLen_Output){
-            size_t j=0;
-            j += snprintf(buffer, maxLenInput_usedLen_Output-j, "{\"ds18b20\":[");
+        size_t FormatJSON(char* buffer, size_t maxLen){
+            size_t used=0;
+            used += snprintf(buffer, maxLen-used, "[");
             if(ds18b20_vect.size()>0){
                 const Ds18B20 * x=ds18b20_vect.at(0);
                 //without trailing comma
-                j += snprintf(buffer+j, maxLenInput_usedLen_Output-j, "{\"addr\":\"0x%016" PRIx64 "\", \"temp\":%.2f}", x->GetAddress(), x->GetTemperature());
+                used += snprintf(buffer+used, maxLen-used, "{\"addr\":\"0x%016" PRIx64 "\", \"temp\":%.2f}", x->GetAddress(), x->GetTemperature());
             }
             for (size_t i = 1; i < ds18b20_vect.size(); i++)
             {
                 const Ds18B20 * x=ds18b20_vect.at(i);
                 //with comma as first character -->avoids trailing comma
-                j += snprintf(buffer+j, maxLenInput_usedLen_Output-j, ",{\"addr\":\"0x%016" PRIx64 "\", \"temp\":%.2f}", x->GetAddress(), x->GetTemperature());
+                used += snprintf(buffer+used, maxLen-used, ",{\"addr\":\"0x%016" PRIx64 "\", \"temp\":%.2f}", x->GetAddress(), x->GetTemperature());
             }
-            j +=snprintf(buffer+j, maxLenInput_usedLen_Output-j, "]}");
-            maxLenInput_usedLen_Output=j;
+            used +=snprintf(buffer+used, maxLen-used, "]");
+            return used;
         }
 
         float GetMostRecentTemp(size_t index){
