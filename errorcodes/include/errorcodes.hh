@@ -37,5 +37,7 @@ enum class ErrorCode:int
     HEALTH_ERROR,
     DATA_FORMAT_ERROR,
     UNKNOWN_HARDWARE_ID,
+    TIMEOUT,
+    CRC,
     
 };

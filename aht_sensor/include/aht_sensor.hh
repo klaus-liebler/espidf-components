@@ -10,6 +10,14 @@ namespace AHT
     Low = 0x38,
     High = 0x39,
   };
+
+  struct STATUS_REG{
+        uint8_t retain1:3;
+        bool isCalibrated:1;
+        bool BitWithSomeUnknownSignificanceBasedOnExampleSoftware:1;
+        uint8_t retain2:2;
+        bool isBusy:1;
+    };
   class M : public I2CSensor
   {
   public:
@@ -23,6 +31,9 @@ namespace AHT
   private:
     uint32_t temp{0};
     uint32_t humid{0};
-    uint8_t readStatus();
+    STATUS_REG readStatus();
+    uint8_t calcCRC(uint8_t *buff,size_t len);
+    ErrorCode waitWhileBusy(int64_t maxWaitMs=200);
+    void resetReg(uint8_t reg);
   };
 }
