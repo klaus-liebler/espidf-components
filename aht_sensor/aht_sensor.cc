@@ -102,7 +102,10 @@ namespace AHT
     {
         uint8_t status = {};
         ERRORCODE_CHECK(Read8(&status, 1));
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmissing-field-initializers"
         return (STATUS_REG)status;
+#pragma GCC diagnostic pop
     }
 
     uint8_t M::calcCRC(uint8_t *buff, size_t len)
