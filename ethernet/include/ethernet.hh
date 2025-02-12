@@ -1,3 +1,8 @@
+
+#if not defined(CONFIG_ETH_SPI_ETHERNET_W5500)
+    #error CONFIG_ETH_SPI_ETHERNET_W5500 must be activated in idf menuconfig
+#endif
+
 #pragma once
 
 #include "esp_netif.h"
@@ -8,6 +13,7 @@
 #include "driver/spi_master.h"
 #include "esp_err.h"
 #include <esp_sntp.h>
+#include <esp_eth_mac_spi.h>
 #include <ctime>
 
 #define TAG "ETH"
@@ -44,42 +50,9 @@ namespace ETHERNET
         }
     }
 
-    void ip_event_handler(void *arg, esp_event_base_t event_base,
-                          int32_t event_id, void *event_data)
-    {
-        switch (event_id)
-        {
 
 
-        case IP_EVENT_ETH_GOT_IP:
-        {
-            ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
-            const esp_netif_ip_info_t *ip_info = &event->ip_info;
-            const char *hostname;
-            esp_netif_get_hostname(eth_netif, &hostname);
-            ESP_LOGI(TAG, "IP_EVENT_ETH_GOT_IP with hostname %s: ETHIP:" IPSTR " ETHMASK:" IPSTR " ETHGW:" IPSTR,
-                     hostname, IP2STR(&ip_info->ip), IP2STR(&ip_info->netmask), IP2STR(&ip_info->gw));
-            esp_sntp_init();
-            break;
-        }
 
-        case IP_EVENT_ETH_LOST_IP:
-        {
-            ESP_LOGI(TAG, "IP_EVENT_ETH_LOST_IP");
-            break;
-        }
-        }
-    }
-
-    static void time_sync_notification_cb(struct timeval *tv)
-    {
-        char strftime_buf[64];
-        struct tm timeinfo;
-        time_t now = time(0); // Get the system time
-        localtime_r(&now, &timeinfo); //convert to localtime
-        strftime(strftime_buf, sizeof(strftime_buf), "%c", &timeinfo); //convert to string representation
-        ESP_LOGI(TAG, "Notification of a time synchronization. The current date/time in Berlin is: %s", strftime_buf);
-    }
 
     void initETH_W5500(bool already_called_netif_init_and_event_loop, spi_host_device_t spiHost, gpio_num_t miso, gpio_num_t mosi, gpio_num_t sclk, uint32_t SPI_MASTER_FREQ_X, gpio_num_t cs, gpio_num_t reset, gpio_num_t irq, uint32_t phyAddress, int intr_flags, const char* hostname)
     {
@@ -144,16 +117,7 @@ namespace ETHERNET
 
         // Register user defined event handers
         ESP_ERROR_CHECK(esp_event_handler_register(ETH_EVENT, ESP_EVENT_ANY_ID, &eth_event_handler, NULL));
-        ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, ESP_EVENT_ANY_ID, &ip_event_handler, NULL));
         ESP_ERROR_CHECK(esp_eth_start(eth_handle_spi));
-
-        esp_sntp_setoperatingmode(SNTP_OPMODE_POLL);
-        esp_sntp_set_sync_mode(SNTP_SYNC_MODE_IMMED);
-        esp_sntp_setservername(0, "pool.ntp.org");
-        esp_sntp_set_time_sync_notification_cb(time_sync_notification_cb);
-        // Set timezone to Berlin
-        setenv("TZ", "CET-1CEST,M3.5.0,M10.5.0/3", 1);
-        tzset();
     }
 }
 #undef TAG

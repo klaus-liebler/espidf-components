@@ -24,16 +24,15 @@ void delayMs(int64_t ms)
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
-esp_err_t nvs_flash_init_and_erase_lazily()
+esp_err_t nvs_flash_init_and_erase_lazily(const char *partition_label)
 {
-    esp_err_t err = nvs_flash_init();
-    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    esp_err_t ret = nvs_flash_init_partition(partition_label);
+    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
-        err=nvs_flash_erase();
-        if(err!=ESP_OK) return err;
-        err = nvs_flash_init();
+        ESP_ERROR_CHECK(nvs_flash_erase_partition(partition_label));
+        ret=nvs_flash_init_partition(partition_label);
     }
-    return err;
+    return ret;
 }
 
 esp_err_t ConfigGpioInput(gpio_num_t gpio, gpio_pull_mode_t pullMode)

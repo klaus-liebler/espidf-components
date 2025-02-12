@@ -16,27 +16,6 @@ constexpr uint64_t IO(int n)
     return (1ULL << n);
 }
 
-#define MESSAGELOG_ON_ERROR(x, ml)                                                          \
-    do                                                                                      \
-    {                                                                                       \
-        esp_err_t err_rc_ = (x);                                                            \
-        if (unlikely(err_rc_ != ESP_OK))                                                    \
-        {                                                                                   \
-            webmanager::M::GetSingleton()->Log(ml, (uint32_t)err_rc_);                      \
-            ESP_LOGE(TAG, "%s(%d) %s %lu", __FUNCTION__, __LINE__, #ml, (uint32_t)err_rc_); \
-        }                                                                                   \
-    } while (0)
-#define MESSAGELOG_ON_ERRORCODE(x, mc)                                                      \
-    do                                                                                      \
-    {                                                                                       \
-        ErrorCode err_rc_ = (x);                                                            \
-        if (err_rc_ != ErrorCode::OK)                                                       \
-        {                                                                                   \
-            webmanager::M::GetSingleton()->Log(mc, (uint32_t)err_rc_);                      \
-            ESP_LOGE(TAG, "%s(%d) %s %lu", __FUNCTION__, __LINE__, #mc, (uint32_t)err_rc_); \
-        }                                                                                   \
-    } while (0)
-
 #define BREAK_ON_ERROR(x, format, ...)                                               \
     do                                                                               \
     {                                                                                \
@@ -133,7 +112,7 @@ constexpr uint64_t IO(int n)
         }                                                                                                             \
     } while (0)
 
-esp_err_t nvs_flash_init_and_erase_lazily();
+esp_err_t nvs_flash_init_and_erase_lazily(const char *partition_label);
 constexpr int64_t ms2ticks(int64_t ms);
 void delayAtLeastMs(int64_t ms);
 void delayMs(int64_t ms);

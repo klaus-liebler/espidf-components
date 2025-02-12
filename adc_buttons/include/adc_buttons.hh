@@ -74,6 +74,16 @@ namespace AdcButtons
         return detectCurrentState(calibratedVoltage_mV);
     }
 
+    static bool IRAM_ATTR s_conv_done_cb(adc_continuous_handle_t handle, const adc_continuous_evt_data_t *edata, void *user_data)
+    {
+        adc_digi_output_data_t *p = (adc_digi_output_data_t *)edata->conv_frame_buffer;
+        uint16_t rawVal = p->type2.data;
+        int calibratedVoltage_mV{0};
+        adc_cali_raw_to_voltage(adc1_cali_handle, rawVal, &calibratedVoltage_mV);
+        detectCurrentState(calibratedVoltage_mV);
+        return true;
+    }
+
 
     void InitAdcButtons(gpio_num_t gpio)
     {
@@ -90,7 +100,7 @@ namespace AdcButtons
         
         adc_cali_curve_fitting_config_t cali_config = {};
         cali_config.unit_id = ADC_UNIT_1;
-        cali_config.atten = ADC_ATTEN_DB_11;
+        cali_config.atten = ADC_ATTEN_DB_12;
         cali_config.bitwidth = ADC_BITWIDTH_12;
         ESP_ERROR_CHECK(adc_cali_create_scheme_curve_fitting(&cali_config, &adc1_cali_handle));
 
@@ -98,8 +108,9 @@ namespace AdcButtons
         dig_cfg.sample_freq_hz = SAMPLE_FREQUENCY;
         dig_cfg.conv_mode = ADC_CONV_SINGLE_UNIT_1;
         dig_cfg.format = ADC_DIGI_OUTPUT_FORMAT_TYPE2;
+        
         adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX];
-        adc_pattern[0].atten = ADC_ATTEN_DB_11;
+        adc_pattern[0].atten = ADC_ATTEN_DB_12;
         adc_pattern[0].channel = adc_channel;
         adc_pattern[0].unit = ADC_UNIT_1;
         adc_pattern[0].bit_width = ADC_BITWIDTH_12;
@@ -107,9 +118,13 @@ namespace AdcButtons
         dig_cfg.adc_pattern = adc_pattern;
         ESP_ERROR_CHECK(adc_continuous_config(handle, &dig_cfg));
 
+        adc_continuous_evt_cbs_t cbs = {};
+        cbs.on_conv_done = s_conv_done_cb,
+        adc_continuous_register_event_callbacks(handle, &cbs, nullptr);
+
         ESP_ERROR_CHECK(adc_continuous_start(handle));
 
-        ESP_LOGI(TAG, "Encoder successfully initialized");
+        ESP_LOGI(TAG, "ADC Buttons successfully initialized");
     }
 }
 #undef TAG

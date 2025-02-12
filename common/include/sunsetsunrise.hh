@@ -75,15 +75,15 @@ namespace sunsetsunrise
         return dRA;
     }
 
-    constexpr tms_t ONE_DAY{24*60*60};
+    constexpr int64_t ONE_DAY{24*60*60};
 
     template <typename T>
-    void NextSunriseAndSunset(time_t unixSecs, T latitudeRadiant, T longitudeRadiant, eDawn dawnLevel, tms_t& nextSunrise, tms_t& nextSunset)
+    void NextSunriseAndSunset(time_t unixSecs, T latitudeRadiant, T longitudeRadiant, eDawn dawnLevel, time_t& nextSunriseUnixSecs, time_t& nextSunsetUnixSecs)
     {
         //wir gehen dann einen Tag nach vorne, runden durch ganzzahlige division auf Mitternacht und multiplizieren, um wieder die Sekunden zu bekommen
-        tms_t nextMidnight=((unixSecs+ONE_DAY)/ONE_DAY)*ONE_DAY;
+        time_t nextMidnightUnixSecs=((unixSecs+ONE_DAY)/ONE_DAY)*ONE_DAY;
         T DK{0};
-        int32_t Tdays = DaysSinceJan1_2020UTC(nextMidnight);
+        int32_t Tdays = DaysSinceJan1_2020UTC(nextMidnightUnixSecs);
         T discrepancy = TimeFormulaHours<T>(DK, Tdays);
         T trueSunPeak = 12.0 - discrepancy;
         const T localTimeShift=longitudeRadiant/(RAD * 15.0f);
@@ -91,8 +91,8 @@ namespace sunsetsunrise
         T timeDifference = 12.0*acos((sin_h - sin(latitudeRadiant) * sin(DK)) / (cos(latitudeRadiant) * cos(DK)))/M_PI;
         T sunriseWorldTimeHours = trueSunPeak - timeDifference - localTimeShift ;
         T sunsetWorldTimeHours  = trueSunPeak + timeDifference - localTimeShift;
-        nextSunrise=nextMidnight+sunriseWorldTimeHours*60*60;
-        nextSunset=nextMidnight+sunsetWorldTimeHours*60*60;
+        nextSunriseUnixSecs=nextMidnightUnixSecs+sunriseWorldTimeHours*60*60;
+        nextSunsetUnixSecs=nextMidnightUnixSecs+sunsetWorldTimeHours*60*60;
         //printf("nextMidnight=%ld, nextSunrise=%ld, nextSunset=%ld", nextMidnight, nextSunrise, nextSunset);
     }
     template <typename T>
