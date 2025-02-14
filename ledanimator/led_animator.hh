@@ -70,7 +70,7 @@ namespace led
         tms_t timeToAutoOff=INT64_MAX;//time is absolute!
         AnimationPattern* standbyPattern{nullptr};
     public:
-        Animator(gpio_num_t gpio, bool invert=false, AnimationPattern* standbyPattern=&CONST_OFF):gpio(gpio), invert(invert), standbyPattern(standbyPattern) {}
+        Animator(gpio_num_t gpio, bool invert=false, AnimationPattern* standbyPattern=&CONST_OFF):gpio(gpio), invert(invert), pattern(standbyPattern), standbyPattern(standbyPattern) {}
         esp_err_t AnimatePixel(AnimationPattern *pattern, tms_t timeToAutoOff=0);
         esp_err_t Refresh();
         esp_err_t Begin(AnimationPattern *pattern=&CONST_OFF, tms_t timeToAutoOff=0);
