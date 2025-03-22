@@ -72,7 +72,7 @@ private:
 	void print_byte_register(const char *name, uint8_t reg, uint8_t qty);
 
 public:
-	void Setup(spi_host_device_t hostDevice, int dmaChannel, gpio_num_t ce_pin, gpio_num_t csn_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin);
+	void Setup(spi_host_device_t hostDevice, spi_dma_chan_t dmaChannel, gpio_num_t ce_pin, gpio_num_t csn_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin);
 
 	void Config(uint8_t channel, uint8_t payloadLen, const uint8_t *const readAddr, uint8_t readAddrLen, uint8_t en_aa, Rf24Datarate speed, Rf24PowerAmp txPower);
 
