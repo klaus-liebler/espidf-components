@@ -22,12 +22,12 @@ namespace milight
     class Milight
     {
     private:
+    Nrf24Receiver *recv;
         iMilightCallback *callback;
+        
         void task();
-        Nrf24Receiver *recv;
-
     public:
-        Milight(iMilightCallback *callback);
-        esp_err_t SetupAndRun(spi_host_device_t hostDevice, int dmaChannel, gpio_num_t ce_pin, gpio_num_t csn_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin);
+        Milight(Nrf24Receiver *recv, iMilightCallback *callback);
+        esp_err_t SetupAndRun();
     };
 }

@@ -1,32 +1,37 @@
 #include <stdio.h>
 #include "sdkconfig.h"
+#include <ctime>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/event_groups.h>
+#include <esp_timer.h>
 #include <milight.hh>
 
 #define TAG "MILIGHT"
 namespace milight
 {
+    constexpr uint8_t V2_OFFSETS[8][4]{
+        {0x45, 0x1F, 0x14, 0x5C},
+        {0x2B, 0xC9, 0xE3, 0x11},
+        {0xEE, 0xDE, 0x0B, 0xAA},
+        {0xAF, 0x03, 0x1D, 0xF3},
+        {0x1A, 0xE2, 0xF0, 0xD1},
+        {0x04, 0xD8, 0x71, 0x42},
+        {0xAF, 0x04, 0xDD, 0x07},
+        {0xE1, 0x93, 0xB8, 0xE4}};
+    
+    constexpr uint8_t V2_OFFSET_JUMP_START = 0x54;
+    
     class MilightDecoder
     {
     public:
         const uint8_t rev[16]{0, 8, 4, 0xC, 2, 0xA, 6, 0xE, 1, 9, 5, 0xD, 3, 0xB, 7, 0xF};
         uint8_t V2_OFFSET(uint8_t byte, uint8_t key, uint8_t jumpStart)
         {
-            static const uint8_t V2_OFFSETS[][4]{
-                {0x45, 0x1F, 0x14, 0x5C},
-                {0x2B, 0xC9, 0xE3, 0x11},
-                {0xEE, 0xDE, 0x0B, 0xAA},
-                {0xAF, 0x03, 0x1D, 0xF3},
-                {0x1A, 0xE2, 0xF0, 0xD1},
-                {0x04, 0xD8, 0x71, 0x42},
-                {0xAF, 0x04, 0xDD, 0x07},
-                {0xE1, 0x93, 0xB8, 0xE4}};
             return V2_OFFSETS[byte - 1][key % 4] + ((jumpStart > 0 && key >= jumpStart && key <= jumpStart + 0x80) ? 0x80 : 0);
         }
 
-        const uint8_t V2_OFFSET_JUMP_START = 0x54;
+        
 
         uint8_t xorKey(uint8_t key)
         {
@@ -119,10 +124,13 @@ namespace milight
 
         ESP_LOGI(TAG, "milightReceiverTask started");
         TickType_t xLastWakeTime;
-        const TickType_t xFrequency = pdMS_TO_TICKS(50);
+        const TickType_t xFrequency = pdMS_TO_TICKS(40);
+        time_t lastForwarded_us{0};
         while (true)
         {
             vTaskDelayUntil( &xLastWakeTime, xFrequency );
+            if(!recv->IsIrqAsserted())
+                continue;
             if (!recv->IsDataReady())
                 continue;
             recv->GetRxData(buf);
@@ -137,7 +145,7 @@ namespace milight
             uint8_t key = dec.xorKey(packet[0]);
             for (size_t i = 1; i <= 7; i++)
             {
-                packet[i] = dec.decodeByte(packet[i], 0, key, dec.V2_OFFSET(i, packet[0], dec.V2_OFFSET_JUMP_START));
+                packet[i] = dec.decodeByte(packet[i], 0, key, dec.V2_OFFSET(i, packet[0], V2_OFFSET_JUMP_START));
             }
             if (id == previousID)
                 continue;
@@ -145,26 +153,26 @@ namespace milight
             // ESP_LOG_BUFFER_HEXDUMP("DECRYP", packet, 9, ESP_LOG_INFO);
             uint8_t cmd = packet[4];
             uint8_t arg = packet[5];
-            if(arg==previousArg && cmd==previousCmd)
+            if(arg==previousArg && cmd==previousCmd && lastForwarded_us+500'000<esp_timer_get_time())
                 continue;
             previousArg=arg;
             previousCmd=cmd;
             ESP_LOGI(TAG, "CMD %0d ARG/SEQ %3d", cmd, arg);
+            lastForwarded_us=esp_timer_get_time();
             callback->ReceivedFromMilight(cmd, arg);
         }
         ESP_LOGI(TAG, "Manager::Task stopped");
         vTaskDelete(nullptr);
     }
 
-    Milight::Milight(iMilightCallback *callback) : callback(callback) {}
-
-    esp_err_t Milight::SetupAndRun(spi_host_device_t hostDevice, spi_dma_chan_t dmaChannel, gpio_num_t ce_pin, gpio_num_t csn_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin)
+    Milight::Milight(Nrf24Receiver *recv, iMilightCallback *callback) :recv(recv), callback(callback) {}
+    
+    esp_err_t Milight::SetupAndRun()
     {
-        this->recv = new Nrf24Receiver();
-        recv->Setup(hostDevice, dmaChannel, ce_pin, csn_pin, miso_pin, mosi_pin, sclk_pin);
-        uint8_t address[6]{0x90, 0x4e, 0x6c, 0x55, 0x55}; // for 9-Byte payload
-        recv->Config(10, 14, address, 5, 0, Rf24Datarate::RF24_1MBPS, Rf24PowerAmp::RF24_PA_HIGH);
-
+        const uint8_t addressLength{5};
+        const uint8_t address[addressLength]{0x90, 0x4e, 0x6c, 0x55, 0x55}; // for 9-Byte payload
+       
+        recv->Config(10, 14, address, addressLength, 0, Rf24Datarate::RF24_1MBPS, Rf24PowerAmp::RF24_PA_HIGH);
         return xTaskCreate([](void *p){((Milight*)p)->task(); }, "milightReceiverTask", 4096*4, this, 12, nullptr) == pdPASS ? ESP_OK : ESP_FAIL;
 
     }

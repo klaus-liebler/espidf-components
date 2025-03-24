@@ -49,11 +49,13 @@ enum class Rf24CrcLength
 
 class Nrf24Receiver
 {
-private:
-	uint8_t PTX;		//In sending mode.
+	private:
+	uint8_t defaultConfigRegisterValue{0b00001000};
 	gpio_num_t cePin;	// CE Pin controls RX / TX
-	uint8_t payloadLen; // Payload width in bytes
-	spi_device_handle_t _SPIHandle;
+	gpio_num_t irqPin;
+	uint8_t PTX;		//In sending mode.
+	uint8_t payloadLen=32; // Payload width in bytes
+	spi_device_handle_t spiHandle;
 	uint8_t buf16[16] __attribute__((aligned(4)));
 
 	void spiTransaction(uint8_t *buf, size_t len);
@@ -72,10 +74,15 @@ private:
 	void print_byte_register(const char *name, uint8_t reg, uint8_t qty);
 
 public:
-	void Setup(spi_host_device_t hostDevice, spi_dma_chan_t dmaChannel, gpio_num_t ce_pin, gpio_num_t csn_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin);
+	Nrf24Receiver(uint8_t defaultConfigRegisterValue, gpio_num_t cePin, gpio_num_t irqPin):defaultConfigRegisterValue(defaultConfigRegisterValue), cePin(cePin), irqPin(irqPin){
+
+	}
+
+	void SetupSpi(spi_host_device_t hostDevice, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin, gpio_num_t csn_pin);
 
 	void Config(uint8_t channel, uint8_t payloadLen, const uint8_t *const readAddr, uint8_t readAddrLen, uint8_t en_aa, Rf24Datarate speed, Rf24PowerAmp txPower);
 
+	bool IsIrqAsserted();
 	bool IsDataReady();
 
 	bool IsRxFifoEmpty();

@@ -51,37 +51,26 @@ constexpr char rf24_pa_dbm[][8] = {"PA_MIN", "PA_LOW", "PA_HIGH", "PA_MAX"};
 	}
 
 
-	void Nrf24Receiver::Setup(spi_host_device_t hostDevice, spi_dma_chan_t dmaChannel, gpio_num_t ce_pin, gpio_num_t csn_pin, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin)
+	void Nrf24Receiver::SetupSpi(spi_host_device_t hostDevice, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin, gpio_num_t csn_pin)
 	{
-		this->cePin = ce_pin;
-		if(cePin != GPIO_NUM_NC){
-			gpio_reset_pin(ce_pin);
-			gpio_set_direction(ce_pin, GPIO_MODE_OUTPUT);
-		}
+
 		ceLow();
 		spi_bus_config_t spi_bus_config{};
-		ESP_LOGI(TAG, "Set GPIO pins in config");
 		spi_bus_config.sclk_io_num = sclk_pin;
 		spi_bus_config.mosi_io_num = mosi_pin;
 		spi_bus_config.miso_io_num = miso_pin;
 		spi_bus_config.quadwp_io_num = GPIO_NUM_NC;
 		spi_bus_config.quadhd_io_num = GPIO_NUM_NC;
 
-		ESP_ERROR_CHECK(spi_bus_initialize(hostDevice, &spi_bus_config, dmaChannel));
-		ESP_LOGI(TAG, "Set GPIO pins in config FINISHED");
+		ESP_ERROR_CHECK(spi_bus_initialize(hostDevice, &spi_bus_config, SPI_DMA_CH_AUTO));
 		spi_device_interface_config_t devcfg{};
 		devcfg.clock_speed_hz = SPI_MASTER_FREQ_8M;
 		devcfg.queue_size = 1;
 		devcfg.mode = 0;
 		devcfg.flags = 0;
 		devcfg.spics_io_num = csn_pin;
-
-		spi_device_handle_t handle;
-		ESP_ERROR_CHECK(spi_bus_add_device(hostDevice, &devcfg, &handle));
-
+		ESP_ERROR_CHECK(spi_bus_add_device(hostDevice, &devcfg, &spiHandle));
 		
-		_SPIHandle = handle;
-		payloadLen = 32;
 	}
 
 	void Nrf24Receiver::spiTransaction(uint8_t *buf, size_t len)
@@ -91,41 +80,47 @@ constexpr char rf24_pa_dbm[][8] = {"PA_MIN", "PA_LOW", "PA_HIGH", "PA_MAX"};
 		SPITransaction.length = len * 8;
 		SPITransaction.tx_buffer = buf;
 		SPITransaction.rx_buffer = buf;
-		spi_device_transmit(_SPIHandle, &SPITransaction);
+		spi_device_transmit(this->spiHandle, &SPITransaction);
 	}
 
 	void Nrf24Receiver::Config(uint8_t channel, uint8_t payloadLen, const uint8_t *const readAddr, uint8_t readAddrLen, uint8_t en_aa, Rf24Datarate speed, Rf24PowerAmp txPower)
-
-	// Sets the important registers in the MiRF module and powers the module
-	// in receiving mode
-	// NB: channel and payload must be set now.
 	{
+		if(cePin != GPIO_NUM_NC){
+			gpio_set_direction(cePin, GPIO_MODE_OUTPUT);
+		}
+		
 		this->payloadLen = payloadLen;
 
 		ceLow();
 
 		memcpy(buf16 + 1, readAddr, readAddrLen);
-		writeRegistersStartingWith1inBuf(RX_ADDR_P1, readAddrLen);
+		writeRegistersStartingWith1inBuf(REG::RX_ADDR_P1, readAddrLen);
 		uint8_t val = 0b10;
-		configRegister(EN_RXADDR, val);
+		configRegister(REG::EN_RXADDR, val);
 		ceHi();
 
 		if ((int)speed > 1)
 		{
-			configRegister(RF_SETUP, (1 << RF_DR_LOW));
+			configRegister(REG::RF_SETUP, (1 << RF_DR_LOW));
 		}
 		else
 		{
-			configRegister(RF_SETUP, (((int)speed) << RF_DR_HIGH));
+			configRegister(REG::RF_SETUP, (((int)speed) << RF_DR_HIGH));
 		}
 
-		configRegister(EN_AA, en_aa);
-		configRegister(RF_SETUP, ((int)txPower) << RF_PWR);
-		configRegister(RF_CH, channel);		// Set RF channel
-		configRegister(RX_PW_P0, payloadLen); // Set length of incoming payload
-		configRegister(RX_PW_P1, payloadLen);
+		configRegister(REG::EN_AA, en_aa);
+		configRegister(REG::RF_SETUP, ((int)txPower) << RF_PWR);
+		configRegister(REG::RF_CH, channel);		// Set RF channel
+		configRegister(REG::RX_PW_P0, payloadLen); // Set length of incoming payload
+		configRegister(REG::RX_PW_P1, payloadLen);
 		PowerUpRx(); // Start receiver
 		FlushRx();
+	}
+
+	bool Nrf24Receiver::IsIrqAsserted()
+	{
+		ESP_ERROR_CHECK(irqPin==GPIO_NUM_NC?ESP_OK:ESP_FAIL);
+		return !gpio_get_level(irqPin);
 	}
 
 	bool Nrf24Receiver::IsDataReady() // Checks if data is available for reading
@@ -138,7 +133,7 @@ constexpr char rf24_pa_dbm[][8] = {"PA_MIN", "PA_LOW", "PA_HIGH", "PA_MAX"};
 
 	bool Nrf24Receiver::IsRxFifoEmpty()
 	{
-		uint8_t fifoStatus = readRegister(FIFO_STATUS);
+		uint8_t fifoStatus = readRegister(REG::FIFO_STATUS);
 		return (fifoStatus & (1 << RX_EMPTY));
 	}
 
@@ -158,21 +153,21 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 		//	repeat from step 1)."
 		// So if we're going to clear RX_DR here, we need to check the RX FIFO
 		// in the dataReady() function
-		configRegister(STATUS, (1 << RX_DR)); // Reset status register
+		configRegister(REG::STATUS, (1 << RX_DR)); // Reset status register
 	}
 
 	uint8_t Nrf24Receiver::GetStatus()
 	{
-		return readRegister(STATUS);
+		return readRegister(REG::STATUS);
 	}
 
 	void Nrf24Receiver::PowerUpRx()
 	{
 		PTX = 0;
 		ceLow();
-		configRegister(CONFIG, mirf_CONFIG | ((1 << PWR_UP) | (1 << PRIM_RX))); //set device as RX mode
+		configRegister(REG::CONFIG, defaultConfigRegisterValue | ((1 << PWR_UP) | (1 << PRIM_RX))); //set device as RX mode
 		ceHi();
-		configRegister(STATUS, (1 << TX_DS) | (1 << MAX_RT)); //Clear seeded interrupt and max tx number interrupt
+		configRegister(REG::STATUS, (1 << TX_DS) | (1 << MAX_RT)); //Clear seeded interrupt and max tx number interrupt
 	}
 
 	void Nrf24Receiver::FlushRx()
@@ -183,7 +178,7 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 	void Nrf24Receiver::PowerDown()
 	{
 		ceLow();
-		configRegister(CONFIG, mirf_CONFIG);
+		configRegister(REG::CONFIG, defaultConfigRegisterValue);
 	}
 
 #define _BV(x) (1 << (x))
@@ -196,18 +191,18 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 		printf("================ NRF Configuration ================\n");
 
 		print_status(GetStatus());
-		print_byte_register("CONFIG\t", CONFIG, 1);
-		print_byte_register("EN_AA\t", EN_AA, 1);
-		print_byte_register("EN_RXADDR", EN_RXADDR, 1);
-		print_byte_register("SETUP_ADDRW", SETUP_AW, 1);
-		print_byte_register("RF_CH\t", RF_CH, 1);
-		print_byte_register("RF_SETUP", RF_SETUP, 1);
+		print_byte_register("CONFIG\t", REG::CONFIG, 1);
+		print_byte_register("EN_AA\t", REG::EN_AA, 1);
+		print_byte_register("EN_RXADDR", REG::EN_RXADDR, 1);
+		print_byte_register("SETUP_ADDRW", REG::SETUP_AW, 1);
+		print_byte_register("RF_CH\t", REG::RF_CH, 1);
+		print_byte_register("RF_SETUP", REG::RF_SETUP, 1);
 
-		print_address_register("RX_ADDR_P0-1", RX_ADDR_P0, 2);
-		print_byte_register("RX_ADDR_P2-5", RX_ADDR_P2, 4);
-		print_address_register("TX_ADDR\t", TX_ADDR, 1);
-		print_byte_register("RX_PW_P0-6", RX_PW_P0, 6);
-		print_byte_register("DYNPD/FEATURE", DYNPD, 2);
+		print_address_register("RX_ADDR_P0-1", REG::RX_ADDR_P0, 2);
+		print_byte_register("RX_ADDR_P2-5", REG::RX_ADDR_P2, 4);
+		print_address_register("TX_ADDR\t", REG::TX_ADDR, 1);
+		print_byte_register("RX_PW_P0-6", REG::RX_PW_P0, 6);
+		print_byte_register("DYNPD/FEATURE", REG::DYNPD, 2);
 		//printf("getDataRate()=%d\n",Nrf24_getDataRate(dev));
 		printf("Data Rate\t = %s\n", rf24_datarates[(int)GetDataRate()]);
 #if 0
@@ -258,7 +253,7 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 	Rf24Datarate Nrf24Receiver::GetDataRate()
 	{
 		Rf24Datarate result;
-		uint8_t dr = readRegister(RF_SETUP);
+		uint8_t dr = readRegister(REG::RF_SETUP);
 		dr = dr & (_BV(RF_DR_LOW) | _BV(RF_DR_HIGH));
 
 		// switch uses RAM (evil!)
@@ -285,9 +280,9 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 	{
 		Rf24CrcLength result = Rf24CrcLength::RF24_CRC_DISABLED;
 
-		uint8_t config = readRegister(CONFIG);
+		uint8_t config = readRegister(REG::CONFIG);
 		config = config & (_BV(CRCO) | _BV(EN_CRC));
-		uint8_t AA = readRegister(EN_AA);
+		uint8_t AA = readRegister(REG::EN_AA);
 
 		if (config & _BV(EN_CRC) || AA)
 		{
@@ -306,7 +301,7 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 
 	Rf24PowerAmp Nrf24Receiver::GetPALevel()
 	{
-		uint8_t level = readRegister(RF_SETUP);
+		uint8_t level = readRegister(REG::RF_SETUP);
 		level = (level & (_BV(RF_PWR_LOW) | _BV(RF_PWR_HIGH))) >> 1;
 		return (Rf24PowerAmp)(level);
 	}
