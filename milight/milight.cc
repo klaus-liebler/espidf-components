@@ -125,7 +125,7 @@ namespace milight
         ESP_LOGI(TAG, "milightReceiverTask started");
         TickType_t xLastWakeTime;
         const TickType_t xFrequency = pdMS_TO_TICKS(40);
-        time_t lastForwarded_us{0};
+        time_t lastForwarded_us{esp_timer_get_time()};
         while (true)
         {
             vTaskDelayUntil( &xLastWakeTime, xFrequency );
@@ -153,11 +153,14 @@ namespace milight
             // ESP_LOG_BUFFER_HEXDUMP("DECRYP", packet, 9, ESP_LOG_INFO);
             uint8_t cmd = packet[4];
             uint8_t arg = packet[5];
-            if(arg==previousArg && cmd==previousCmd && lastForwarded_us+500'000<esp_timer_get_time())
+            
+            if(arg == previousArg && cmd == previousCmd && (esp_timer_get_time() - lastForwarded_us) < 500'000) {
+                ESP_LOGI(TAG, "CMD %3d ARG %3d (blocked)", cmd, arg);
                 continue;
+            }
+            ESP_LOGI(TAG, "CMD %3d ARG %3d (forwarded)", cmd, arg);
             previousArg=arg;
             previousCmd=cmd;
-            ESP_LOGI(TAG, "CMD %0d ARG/SEQ %3d", cmd, arg);
             lastForwarded_us=esp_timer_get_time();
             callback->ReceivedFromMilight(cmd, arg);
         }

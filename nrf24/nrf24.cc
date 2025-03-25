@@ -119,7 +119,7 @@ constexpr char rf24_pa_dbm[][8] = {"PA_MIN", "PA_LOW", "PA_HIGH", "PA_MAX"};
 
 	bool Nrf24Receiver::IsIrqAsserted()
 	{
-		ESP_ERROR_CHECK(irqPin==GPIO_NUM_NC?ESP_OK:ESP_FAIL);
+		ESP_ERROR_CHECK(irqPin!=GPIO_NUM_NC?ESP_OK:ESP_FAIL);
 		return !gpio_get_level(irqPin);
 	}
 

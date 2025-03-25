@@ -205,7 +205,7 @@ namespace OneWire
             return onewire_bus_write_bytes(bus, tx_buffer, sizeof(tx_buffer));
         }
 
-        void Init()
+        ErrorCode Init()
         {
             onewire_bus_config_t bus_config = {
                 .bus_gpio_num = gpio,
@@ -239,10 +239,14 @@ namespace OneWire
                 ESP_LOGI(TAG, "Found a DS18B20[%d], address: %016" PRIx64 , ds18b20_vect.size(), next_onewire_device.address);
                 ds18b20_vect.push_back(device);
             }
+            if(ds18b20_vect.size()==0){
+                return ErrorCode::NONE_AVAILABLE;
+            }
             ESP_ERROR_CHECK(onewire_del_device_iter(iter));
             TriggerTemperatureConversionForAll();
             nextReadoutMs=(esp_timer_get_time()/1000)+800;
             ESP_LOGI(TAG, "Searching done, %d DS18B20 device(s) found", ds18b20_vect.size());
+            return ErrorCode::OK;
         }
     };
 
