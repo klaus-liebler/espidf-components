@@ -7,7 +7,8 @@
 
 #include <driver/spi_master.h>
 #include <driver/gpio.h>
-#include "esp_log.h"
+
+#include "errorcodes.hh"
  
 /**
  * Power Amplifier level.
@@ -33,18 +34,7 @@ enum class Rf24Datarate
 	RF24_1MBPS = 0,
 	RF24_2MBPS = 1,
 	RF24_250KBPS = 2,
-};
-
-/**
- * CRC Length.  How big (if any) of a CRC is included.
- *
- * For use with setCRCLength()
- */
-enum class Rf24CrcLength
-{
-	RF24_CRC_DISABLED = 0,
-	RF24_CRC_8,
-	RF24_CRC_16
+	RESERVED=3
 };
 
 class Nrf24Receiver
@@ -80,7 +70,7 @@ public:
 
 	void SetupSpi(spi_host_device_t hostDevice, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin, gpio_num_t csn_pin);
 
-	void Config(uint8_t channel, uint8_t payloadLen, const uint8_t *const readAddr, uint8_t readAddrLen, uint8_t en_aa, Rf24Datarate speed, Rf24PowerAmp txPower);
+	ErrorCode Config(uint8_t channel, uint8_t payloadLen, const uint8_t *const readAddr, uint8_t readAddrLen, uint8_t en_aa, Rf24Datarate speed, Rf24PowerAmp txPower);
 
 	bool IsIrqAsserted();
 	bool IsDataReady();
@@ -101,7 +91,7 @@ public:
 
 	Rf24Datarate GetDataRate();
 
-	Rf24CrcLength GetCRCLength();
+	uint8_t GetCRCByteLength();
 
 	Rf24PowerAmp GetPALevel();
 };

@@ -5,6 +5,7 @@
 #include <esp_log.h>
 #include <driver/gpio.h>
 #include <esp_timer.h>
+#define TAG "LED"
 
 
 namespace led
@@ -37,11 +38,13 @@ namespace led
             {
                 state = false;
                 nextChange = now+timeOff;
+                ESP_LOGD(TAG, "LED OFF");
             }
             else
             {
                 state = true;
                 nextChange = now+timeOn;
+                ESP_LOGD(TAG, "LED ON");
             }
             return state;
         }
@@ -76,3 +79,4 @@ namespace led
         esp_err_t Begin(AnimationPattern *pattern=&CONST_OFF, tms_t timeToAutoOff=0);
     };
 }
+#undef TAG

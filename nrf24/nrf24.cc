@@ -3,9 +3,9 @@
 #include <esp_log.h>
 #define TAG "Nrf24RECV"
 
-constexpr char rf24_datarates[][8] = {"1MBPS", "2MBPS", "250KBPS"};
-constexpr char rf24_crclength[][10] = {"Disabled", "8 bits", "16 bits"};
-constexpr char rf24_pa_dbm[][8] = {"PA_MIN", "PA_LOW", "PA_HIGH", "PA_MAX"};
+constexpr char rf24_datarates[][9] = {"1Mbps","2Mbps", "250kbps", "Reserved"};
+constexpr char rf24_crclength[][9] = {"Disabled", "8 bits", "16 bits"};
+constexpr char rf24_pa_dbm[][5] = {"MIN", "LOW", "HIGH", "MAX"};
 	void Nrf24Receiver::configRegister(uint8_t reg, uint8_t value)
 	{
 		buf16[0] = (W_REGISTER | (REGISTER_MASK & reg));
@@ -40,31 +40,27 @@ constexpr char rf24_pa_dbm[][8] = {"PA_MIN", "PA_LOW", "PA_HIGH", "PA_MAX"};
 
 	void Nrf24Receiver::ceHi()
 	{
-		if(cePin == GPIO_NUM_NC) return;
 		gpio_set_level(cePin, 1);
 	}
 
 	void Nrf24Receiver::ceLow()
 	{
-		if(cePin == GPIO_NUM_NC) return;
 		gpio_set_level(cePin, 0);
 	}
 
 
 	void Nrf24Receiver::SetupSpi(spi_host_device_t hostDevice, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin, gpio_num_t csn_pin)
 	{
-
-		ceLow();
 		spi_bus_config_t spi_bus_config{};
 		spi_bus_config.sclk_io_num = sclk_pin;
 		spi_bus_config.mosi_io_num = mosi_pin;
 		spi_bus_config.miso_io_num = miso_pin;
 		spi_bus_config.quadwp_io_num = GPIO_NUM_NC;
 		spi_bus_config.quadhd_io_num = GPIO_NUM_NC;
-
+		#define SPI_MASTER_FREQ_2M      (80 * 1000 * 1000 / 40)
 		ESP_ERROR_CHECK(spi_bus_initialize(hostDevice, &spi_bus_config, SPI_DMA_CH_AUTO));
 		spi_device_interface_config_t devcfg{};
-		devcfg.clock_speed_hz = SPI_MASTER_FREQ_8M;
+		devcfg.clock_speed_hz = SPI_MASTER_FREQ_2M;
 		devcfg.queue_size = 1;
 		devcfg.mode = 0;
 		devcfg.flags = 0;
@@ -83,15 +79,12 @@ constexpr char rf24_pa_dbm[][8] = {"PA_MIN", "PA_LOW", "PA_HIGH", "PA_MAX"};
 		spi_device_transmit(this->spiHandle, &SPITransaction);
 	}
 
-	void Nrf24Receiver::Config(uint8_t channel, uint8_t payloadLen, const uint8_t *const readAddr, uint8_t readAddrLen, uint8_t en_aa, Rf24Datarate speed, Rf24PowerAmp txPower)
+	ErrorCode Nrf24Receiver::Config(uint8_t channel, uint8_t payloadLen, const uint8_t *const readAddr, uint8_t readAddrLen, uint8_t en_aa, Rf24Datarate speed, Rf24PowerAmp txPower)
 	{
-		if(cePin != GPIO_NUM_NC){
-			gpio_set_direction(cePin, GPIO_MODE_OUTPUT);
-		}
+		ceLow();
+		gpio_set_direction(cePin, GPIO_MODE_OUTPUT);
 		
 		this->payloadLen = payloadLen;
-
-		ceLow();
 
 		memcpy(buf16 + 1, readAddr, readAddrLen);
 		writeRegistersStartingWith1inBuf(REG::RX_ADDR_P1, readAddrLen);
@@ -115,6 +108,8 @@ constexpr char rf24_pa_dbm[][8] = {"PA_MIN", "PA_LOW", "PA_HIGH", "PA_MAX"};
 		configRegister(REG::RX_PW_P1, payloadLen);
 		PowerUpRx(); // Start receiver
 		FlushRx();
+		PrintDetails();
+		return ErrorCode::OK;
 	}
 
 	bool Nrf24Receiver::IsIrqAsserted()
@@ -203,17 +198,11 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 		print_address_register("TX_ADDR\t", REG::TX_ADDR, 1);
 		print_byte_register("RX_PW_P0-6", REG::RX_PW_P0, 6);
 		print_byte_register("DYNPD/FEATURE", REG::DYNPD, 2);
-		//printf("getDataRate()=%d\n",Nrf24_getDataRate(dev));
 		printf("Data Rate\t = %s\n", rf24_datarates[(int)GetDataRate()]);
-#if 0
-	printf_P(PSTR("Model\t\t = "
-	PRIPSTR
-	"\r\n"),pgm_read_ptr(&rf24_model_e_str_P[isPVariant()]));
-#endif
 		//printf("getCRCLength()=%d\n",Nrf24_getCRCLength(dev));
-		printf("CRC Length\t = %s\n", rf24_crclength[(int)GetCRCLength()]);
+		printf("CRC Length\t = %dbyte\n", GetCRCByteLength());
 		//printf("getPALevel()=%d\n",Nrf24_getPALevel());
-		printf("PA Power\t = %s\n", rf24_pa_dbm[(int)GetPALevel()]);
+		printf("PA Power\t = PA_%s\n", rf24_pa_dbm[(int)GetPALevel()]);
 	}
 
 	void Nrf24Receiver::print_status(uint8_t status)
@@ -252,51 +241,16 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 
 	Rf24Datarate Nrf24Receiver::GetDataRate()
 	{
-		Rf24Datarate result;
 		uint8_t dr = readRegister(REG::RF_SETUP);
-		dr = dr & (_BV(RF_DR_LOW) | _BV(RF_DR_HIGH));
-
-		// switch uses RAM (evil!)
-		// Order matters in our case below
-		if (dr == _BV(RF_DR_LOW))
-		{
-			// '10' = 250KBPS
-			result = Rf24Datarate::RF24_250KBPS;
-		}
-		else if (dr == _BV(RF_DR_HIGH))
-		{
-			// '01' = 2MBPS
-			result = Rf24Datarate::RF24_2MBPS;
-		}
-		else
-		{
-			// '00' = 1MBPS
-			result = Rf24Datarate::RF24_1MBPS;
-		}
-		return result;
+		dr = ((dr & _BV(RF_DR_LOW))>>(RF_DR_LOW-1)) |((dr & _BV(RF_DR_HIGH)) >> _BV(RF_DR_HIGH));
+		return (Rf24Datarate)dr;
 	}
 
-	Rf24CrcLength Nrf24Receiver::GetCRCLength()
+	uint8_t Nrf24Receiver::GetCRCByteLength()
 	{
-		Rf24CrcLength result = Rf24CrcLength::RF24_CRC_DISABLED;
-
-		uint8_t config = readRegister(REG::CONFIG);
-		config = config & (_BV(CRCO) | _BV(EN_CRC));
-		uint8_t AA = readRegister(REG::EN_AA);
-
-		if (config & _BV(EN_CRC) || AA)
-		{
-			if (config & _BV(CRCO))
-			{
-				result = Rf24CrcLength::RF24_CRC_16;
-			}
-			else
-			{
-				result = Rf24CrcLength::RF24_CRC_8;
-			}
-		}
-
-		return result;
+		uint8_t crcBits = readRegister(REG::CONFIG);
+		if(!(crcBits & 0b00001000)) return 0;
+		return (crcBits & 0b00000100) ? 2 : 1;
 	}
 
 	Rf24PowerAmp Nrf24Receiver::GetPALevel()

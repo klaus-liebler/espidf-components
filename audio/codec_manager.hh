@@ -17,7 +17,7 @@ namespace CodecManager
         SIXTEEN=2,
     };
 
-    class iCodecManager
+    class aCodecManager
     {
 
     protected:
@@ -53,7 +53,7 @@ namespace CodecManager
         virtual ErrorCode SetSampleRate(uint32_t sampleRateHz) = 0;
 
     public:
-        //Samples sind die Anzahl der 16bit-Werte. Diese sind bei Stereo doppelt so groß, wie bei Mono. Also bei Mono 44100Hz gibt es pro sek 44100 samples und bei Stereo eben 88200
+        //sampleCnt sind die Anzahl der 16bit-Werte. Diese sind bei Stereo doppelt so groß, wie bei Mono. Also bei Mono 44100Hz gibt es pro sek 44100 samples und bei Stereo eben 88200
         virtual ErrorCode WriteAudioData(eChannels ch, eSampleBits bits, uint32_t sampleRateHz, size_t sampleCnt, void *buf) = 0;
         
         
@@ -63,7 +63,7 @@ namespace CodecManager
         virtual ErrorCode Init() = 0;
     };
 
-    class I2sWithHardwareVolume : public iCodecManager
+    class I2sWithHardwareVolume : public aCodecManager
     {
            
     public:

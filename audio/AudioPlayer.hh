@@ -66,7 +66,7 @@ namespace AudioPlayer
     {
     private:
         QueueHandle_t orderQueue{nullptr};
-        CodecManager::iCodecManager* codecManager{nullptr};
+        CodecManager::aCodecManager* codecManager{nullptr};
         mp3dec_t *decoder;
         int32_t frameStart{0};
         int16_t *outBuffer{nullptr};
@@ -90,8 +90,6 @@ namespace AudioPlayer
             currentOrder=SILENCE_ORDER;
             return ErrorCode::OK;
         }
-
-
         
         ErrorCode LoopMP3(){
             if (frameStart >= currentOrder.fileLen)
@@ -231,7 +229,7 @@ namespace AudioPlayer
             return codecManager->Init();
         }
 
-        Player(CodecManager::iCodecManager* codecManager)
+        Player(CodecManager::aCodecManager* codecManager)
         {
             this->outBuffer = new int16_t[MP3::CHANNELS_PER_SAMPLE * MP3::FRAMES_IN_BUFFER * MP3::SAMPLES_PER_FRAME];
             this->decoder = new mp3dec_t();

@@ -10,14 +10,18 @@
 #define TAG "LED"
 namespace led
 {
-
-
-
     esp_err_t Animator::AnimatePixel(AnimationPattern *pattern, tms_t timeToAutoOff) // time is relative, "0" means: no auto off
     {
-        if (pattern == nullptr)
-            this->pattern = standbyPattern;
         tms_t now = (esp_timer_get_time() / 1000);
+        if (pattern == nullptr){
+            this->pattern = standbyPattern;
+            ESP_LOGI(TAG, "LED @ %d switched to standby pattern", this->gpio);
+        }
+        if(pattern==this->pattern){
+            ESP_LOGD(TAG, "LED @ %d already animating with the same pattern", this->gpio);
+            return ESP_OK;
+        }
+        this->pattern = pattern;
         if (timeToAutoOff == 0)
         {
             this->timeToAutoOff = INT64_MAX;
@@ -26,8 +30,7 @@ namespace led
         {
             this->timeToAutoOff = now + timeToAutoOff;
         }
-        pattern->Reset(now);
-        this->pattern = pattern;
+        this->pattern->Reset(now);
         return ESP_OK;
     }
 
@@ -37,6 +40,8 @@ namespace led
         if (now >= timeToAutoOff)
         {
             this->pattern = standbyPattern;
+            this->pattern->Reset(now);
+            ESP_LOGI(TAG, "LED @ %d switched to standby pattern", this->gpio);
         }
         bool on = this->pattern->Animate(now);
         gpio_set_level(this->gpio, on ^ invert);
