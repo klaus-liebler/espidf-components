@@ -52,15 +52,23 @@ constexpr char rf24_pa_dbm[][5] = {"MIN", "LOW", "HIGH", "MAX"};
 	void Nrf24Receiver::SetupSpi(spi_host_device_t hostDevice, gpio_num_t miso_pin, gpio_num_t mosi_pin, gpio_num_t sclk_pin, gpio_num_t csn_pin)
 	{
 		spi_bus_config_t spi_bus_config{};
-		spi_bus_config.sclk_io_num = sclk_pin;
 		spi_bus_config.mosi_io_num = mosi_pin;
 		spi_bus_config.miso_io_num = miso_pin;
+		spi_bus_config.sclk_io_num = sclk_pin;
 		spi_bus_config.quadwp_io_num = GPIO_NUM_NC;
 		spi_bus_config.quadhd_io_num = GPIO_NUM_NC;
-		#define SPI_MASTER_FREQ_2M      (80 * 1000 * 1000 / 40)
+		spi_bus_config.data4_io_num = GPIO_NUM_NC;     ///< GPIO pin for spi data4 signal in octal mode, or -1 if not used.
+		spi_bus_config.data5_io_num = GPIO_NUM_NC;     ///< GPIO pin for spi data5 signal in octal mode, or -1 if not used.
+		spi_bus_config.data6_io_num = GPIO_NUM_NC;     ///< GPIO pin for spi data6 signal in octal mode, or -1 if not used.
+		spi_bus_config.data7_io_num = GPIO_NUM_NC;     ///< GPIO pin for spi data7 signal in octal mode, or -1 if not used.
+		spi_bus_config.data_io_default_level=false; ///< Output data IO default level when no transaction.
+		spi_bus_config.max_transfer_sz=0;  ///< Maximum transfer size, in bytes. Defaults to 4092 if 0 when DMA enabled, or to `SOC_SPI_MAXIMUM_BUFFER_SIZE` if DMA is disabled.
+		spi_bus_config.flags=0;       ///< Abilities of bus to be checked by the driver. Or-ed value of ``SPICOMMON_BUSFLAG_*`` flags.
+    	spi_bus_config.isr_cpu_id=ESP_INTR_CPU_AFFINITY_AUTO;    ///< Select cpu core to register SPI ISR.
+		spi_bus_config.intr_flags=0;
 		ESP_ERROR_CHECK(spi_bus_initialize(hostDevice, &spi_bus_config, SPI_DMA_CH_AUTO));
 		spi_device_interface_config_t devcfg{};
-		devcfg.clock_speed_hz = SPI_MASTER_FREQ_2M;
+		devcfg.clock_speed_hz = SPI_MASTER_FREQ_8M;
 		devcfg.queue_size = 1;
 		devcfg.mode = 0;
 		devcfg.flags = 0;
