@@ -209,6 +209,9 @@ namespace OneWire
         {
             onewire_bus_config_t bus_config = {
                 .bus_gpio_num = gpio,
+                .flags = {
+                    .en_pull_up = 1, /*!< Enable internal pull-up resistor */
+                },
             };
             onewire_bus_rmt_config_t rmt_config = {
                 .max_rx_bytes = 10, // 1byte ROM command + 8byte ROM number + 1byte device command

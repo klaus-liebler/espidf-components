@@ -121,7 +121,7 @@ class I2CSensor{
         case STATE::INITIAL:{
             if(i2c_master_probe(bus_handle, this->address_7bit, 1000)!=ESP_OK){
                 state = STATE::ERROR_NOT_FOUND;
-                ESP_LOGE(TAG, "Device with address %d not found state = STATE::ERROR_NOT_FOUND; return ErrorCode::DEVICE_NOT_RESPONDING", this->address_7bit);
+                ESP_LOGE(TAG, "Device with address %02x not found state = STATE::ERROR_NOT_FOUND; return ErrorCode::DEVICE_NOT_RESPONDING", this->address_7bit);
                 nextAction=INT64_MAX;
                 return ErrorCode::DEVICE_NOT_RESPONDING;
             }
