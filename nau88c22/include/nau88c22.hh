@@ -31,7 +31,7 @@ namespace nau88c22
     constexpr size_t AUDIO_BUFFER_SIZE_IN_SAMPLES{2048};
     constexpr size_t TARGET_CHANNELS{2};
 
-    class M : public CodecManager::I2sWithHardwareVolume
+    class M : public CodecManager::aI2sCodecManager
     {
     private:
         i2c_master_bus_handle_t bus_handle;
@@ -141,7 +141,7 @@ namespace nau88c22
             gpio_num_t ws,
             gpio_num_t data,
             uint8_t initialVolume = 127,
-            uint32_t initialSampleRateHz=44100) : I2sWithHardwareVolume(initialSampleRateHz), bus_handle(bus_handle), mclk(mclk), bck(bck), ws(ws), data(data), volumeSpeakers(initialVolume)
+            uint32_t initialSampleRateHz=44100) : CodecManager::aI2sCodecManager(initialSampleRateHz), bus_handle(bus_handle), mclk(mclk), bck(bck), ws(ws), data(data), volumeSpeakers(initialVolume)
         {
         }
 

@@ -225,10 +225,6 @@ namespace AudioPlayer
             }
         }
 
-        ErrorCode Init(){
-            return codecManager->Init();
-        }
-
         Player(CodecManager::aCodecManager* codecManager)
         {
             this->outBuffer = new int16_t[MP3::CHANNELS_PER_SAMPLE * MP3::FRAMES_IN_BUFFER * MP3::SAMPLES_PER_FRAME];
