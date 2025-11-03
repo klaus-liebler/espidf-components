@@ -170,7 +170,7 @@ namespace nau88c22
             return ErrorCode::OK;
         }
 
-        ErrorCode Init() override
+        ErrorCode Init()
         {
             ESP_LOGI(TAG, "Setup I2S");
             RETURN_ON_ERRORCODE(this->InitI2sEsp32(mclk, bck, ws, data));
