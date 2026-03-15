@@ -4,21 +4,36 @@
 #include "freertos/task.h"
 #include "freertos/queue.h"
 #include "esp_log.h"
-#include "i2c.hh"
+#include "i2c/interfaces.hh"
 
 
 static const char *TAG = "ADS1115";
 
 
-ADS1115::ADS1115(i2c_port_t i2c_port, uint8_t address) : i2c_port(i2c_port), address(address){}
+ADS1115::ADS1115(i2c::iI2CBus* i2c_bus, uint8_t address)
+    : i2c_bus(i2c_bus), i2c_device(nullptr), address(address) {}
 
 constexpr uint8_t SPSindex2WaitingTime[] = {125, 63, 32, 16, 8, 4, 3, 2};
 
-esp_err_t ADS1115::Init(ads1115_sps_t sps, int64_t *howLongToWaitForResultMilliseconds)
+ErrorCode ADS1115::Init(ads1115_sps_t sps, int64_t *howLongToWaitForResultMilliseconds)
 {
-    if(I2C::IsAvailable(this->i2c_port, this->address)!=ESP_OK){
+    if (howLongToWaitForResultMilliseconds == nullptr) {
+        return ErrorCode::INVALID_ARGUMENT_VALUES;
+    }
+
+    if (this->i2c_bus == nullptr) {
+        *howLongToWaitForResultMilliseconds = INT64_MAX;
+        return ErrorCode::INVALID_ARGUMENT_VALUES;
+    }
+
+    if (this->i2c_device == nullptr && this->i2c_bus->CreateDevice(this->address, &this->i2c_device) != ErrorCode::OK) {
+        *howLongToWaitForResultMilliseconds = INT64_MAX;
+        return ErrorCode::DEVICE_NOT_RESPONDING;
+    }
+
+    if (this->i2c_device == nullptr || this->i2c_device->Probe() != ErrorCode::OK) {
         *howLongToWaitForResultMilliseconds=INT64_MAX;
-        return ESP_FAIL;
+        return ErrorCode::DEVICE_NOT_RESPONDING;
     }
     config.bit.OS = 0; // always start conversion
     config.bit.MUX = (uint16_t)ads1115_mux_t::ADS1115_MUX_0_GND;
@@ -31,39 +46,61 @@ esp_err_t ADS1115::Init(ads1115_sps_t sps, int64_t *howLongToWaitForResultMillis
     config.bit.COMP_QUE = 0b11;
     ESP_LOGD(TAG, "Initial content of config register will be 0x%04X", config.reg);
     *howLongToWaitForResultMilliseconds=SPSindex2WaitingTime[config.bit.DR];
-    
-	uint8_t out[2];
-    out[0] = config.reg >> 8;   // get 8 greater bits
-    out[1] = config.reg & 0xFF; // get 8 lower bits
-    return I2C::WriteReg(this->i2c_port, this->address, (uint8_t)ads1115_register_addresses_t::ADS1115_CONFIG_REGISTER_ADDR, out, 2);
+
+    return this->i2c_device->WriteRegisterU16BE(
+        (uint8_t)ads1115_register_addresses_t::ADS1115_CONFIG_REGISTER_ADDR,
+        config.reg
+    );
 }
 
 
 
-esp_err_t ADS1115::TriggerMeasurement(ads1115_mux_t mux)
+ErrorCode ADS1115::TriggerMeasurement(ads1115_mux_t mux)
 {
     config.bit.MUX=(uint16_t)mux;
     config.bit.OS=1;
-    uint8_t out[2];
-    out[0] = config.reg >> 8;   // get 8 greater bits
-    out[1] = config.reg & 0xFF; // get 8 lower bits
-    return I2C::WriteReg(this->i2c_port, this->address, (uint8_t)ads1115_register_addresses_t::ADS1115_CONFIG_REGISTER_ADDR, out, 2);
+
+    if (this->i2c_device == nullptr) {
+        return ErrorCode::NOT_YET_INITIALIZED;
+    }
+
+    return this->i2c_device->WriteRegisterU16BE(
+        (uint8_t)ads1115_register_addresses_t::ADS1115_CONFIG_REGISTER_ADDR,
+        config.reg
+    );
 }
-esp_err_t ADS1115::GetRaw(int16_t *val)
+ErrorCode ADS1115::GetRaw(int16_t *val)
 {
-    uint8_t data[2];
-    esp_err_t err = I2C::ReadReg(this->i2c_port, this->address, (uint8_t)(ads1115_register_addresses_t::ADS1115_CONVERSION_REGISTER_ADDR), data, 2);
-    *val= ((uint16_t)data[0] << 8) | (uint16_t)data[1];
-    return err;
+    if (this->i2c_device == nullptr || val == nullptr) {
+        return ErrorCode::INVALID_ARGUMENT_VALUES;
+    }
+
+    uint16_t raw_u16 = 0;
+    ErrorCode err = this->i2c_device->ReadRegisterU16BE(
+        (uint8_t)ads1115_register_addresses_t::ADS1115_CONVERSION_REGISTER_ADDR,
+        &raw_u16
+    );
+    if (err != ErrorCode::OK) {
+        return err;
+    }
+    *val = static_cast<int16_t>(raw_u16);
+    return ErrorCode::OK;
 }
 
-esp_err_t ADS1115::GetVoltage(float *val)
+ErrorCode ADS1115::GetVoltage(float *val)
 {
+    if (val == nullptr) {
+        return ErrorCode::INVALID_ARGUMENT_VALUES;
+    }
+
     const double fsr[] = {6.144, 4.096, 2.048, 1.024, 0.512, 0.256};
     const int16_t bits = (1L << 15) - 1;
     int16_t raw;
 
-    esp_err_t ret = GetRaw(&raw);
+    ErrorCode ret = GetRaw(&raw);
+    if (ret != ErrorCode::OK) {
+        return ret;
+    }
     *val= (float)raw * fsr[config.bit.PGA] / (double)bits;
     return ret;
 }

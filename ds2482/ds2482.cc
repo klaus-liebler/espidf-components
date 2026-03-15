@@ -1,6 +1,5 @@
 
 #include "ds2482.hh"
-#include <i2c.hh>
 #include <common.hh>
 
 namespace DS2482
@@ -49,8 +48,13 @@ namespace DS2482
 	//
 	ErrorCode M::Setup()
 	{
+		if (this->i2c_bus == nullptr)
+			return ErrorCode::INVALID_ARGUMENT_VALUES;
 
-		if (I2C::IsAvailable(this->i2c_port, (uint8_t)this->device) != ESP_OK)
+		if (this->i2c_device == nullptr && this->i2c_bus->CreateDevice((uint8_t)this->device, &this->i2c_device) != ErrorCode::OK)
+			return ErrorCode::DEVICE_NOT_RESPONDING;
+
+		if (this->i2c_device == nullptr || this->i2c_device->Probe() != ErrorCode::OK)
 			return ErrorCode::DEVICE_NOT_RESPONDING;
 
 		// reset the DS2482 ON selected address
@@ -79,6 +83,8 @@ namespace DS2482
 	bool M::reset()
 	{
 		uint8_t status;
+		if (this->i2c_device == nullptr)
+			return false;
 
 		// Device Reset
 		//   S AD,0 [A] DRST [A] Sr AD,1 [A] [SS] A\ P
@@ -86,7 +92,8 @@ namespace DS2482
 		//  SS status byte to read to verify state
 
 		//ist wie ein MemoryRead von der "CMD_DRST"-Speicherzelle
-		I2C::ReadReg(i2c_port, (uint8_t)device, CMD_DRST, &status, 1);
+		if (this->i2c_device->ReadRegister(CMD_DRST, &status, 1) != ErrorCode::OK)
+			return false;
 		// check for failure due to incorrect read back of status
 		return ((status & 0xF7) == 0x10);
 	}
@@ -102,12 +109,14 @@ namespace DS2482
 	bool M::writeConfig()
 	{
 		uint8_t read_config;
+		if (this->i2c_device == nullptr)
+			return false;
 		// Write configuration (Case A)
 		//   S AD,0 [A] WCFG [A] CF [A] Sr AD,1 [A] [CF] A\ P
 		//  [] indicates from slave
 		//  CF configuration byte to write
 		uint16_t pseudoAddress = (CMD_WCFG << 8) | (((~currCfg << 4) | currCfg) & 0xFF);
-		if (I2C::ReadReg16(i2c_port, (uint8_t)device, pseudoAddress, &read_config, 1) != ESP_OK)
+		if (this->i2c_device->ReadRegisterAddress16(pseudoAddress, &read_config, 1) != ErrorCode::OK)
 			return false;
 		if (currCfg != read_config) {
 			// handle error
@@ -127,6 +136,8 @@ namespace DS2482
 	bool M::channelSelect(uint8_t channel)
 	{
 		uint8_t ch, ch_read, check;
+		if (this->i2c_device == nullptr)
+			return false;
 
 		switch (channel)
 		{
@@ -166,7 +177,8 @@ namespace DS2482
 		};
 
 		uint16_t pseudoAddress = (CMD_CHSL << 8) | ch;
-		I2C::ReadReg16(i2c_port, (uint8_t)device, pseudoAddress, &check, 1);
+		if (this->i2c_device->ReadRegisterAddress16(pseudoAddress, &check, 1) != ErrorCode::OK)
+			return false;
 
 		// check for failure due to incorrect read back of channel
 		return (check == ch_read);
@@ -190,7 +202,8 @@ namespace DS2482
 		//                       Repeat until 1WB bit has changed to 0
 		//  [] indicates from slave
 		uint8_t cmd = CMD_1WRS;
-		I2C::Write(i2c_port, (uint8_t)device, &cmd, 1);
+		if (this->i2c_device == nullptr || this->i2c_device->WriteRaw(&cmd, 1) != ErrorCode::OK)
+			return false;
 
 		uint8_t status = pollStatus();
 		// check for short condition
@@ -214,7 +227,11 @@ namespace DS2482
 		int poll_count = 0;
 		do
 		{
-			I2C::Read(i2c_port, (uint8_t)device, &status, 1);
+			if (this->i2c_device == nullptr || this->i2c_device->ReadRaw(&status, 1) != ErrorCode::OK)
+			{
+				reset();
+				return UINT8_MAX;
+			}
 		} while ((status & STATUS_1WB) && (poll_count++ < POLL_LIMIT));
 
 		// check for failure due to poll limit reached
@@ -271,7 +288,8 @@ namespace DS2482
 		//  BB indicates byte containing bit value in msbit
 
 		uint8_t cmd[2] = {CMD_1WSB, sendbit ? (uint8_t)0x80 : (uint8_t)0x00};
-		I2C::Write(i2c_port, (uint8_t)device, cmd, 2);
+		if (this->i2c_device == nullptr || this->i2c_device->WriteRaw(cmd, 2) != ErrorCode::OK)
+			return false;
 
 		uint8_t status = pollStatus();
 
@@ -303,7 +321,8 @@ namespace DS2482
 		//  DD data to write
 
 		uint8_t cmd[2] = {CMD_1WWB, sendbyte};
-		I2C::Write(i2c_port, (uint8_t)device, cmd, 2);
+		if (this->i2c_device == nullptr || this->i2c_device->WriteRaw(cmd, 2) != ErrorCode::OK)
+			return;
 		pollStatus();
 	}
 
@@ -327,10 +346,12 @@ namespace DS2482
 	  DD data read
 */
 		uint8_t cmd = CMD_1WRB;
-		I2C::Write(i2c_port, (uint8_t)device, &cmd, 1);
+		if (this->i2c_device == nullptr || this->i2c_device->WriteRaw(&cmd, 1) != ErrorCode::OK)
+			return UINT8_MAX;
 		pollStatus();
 		uint16_t pseudoAddress = (CMD_SRP << 8) | 0xE1;
-		I2C::ReadReg16(i2c_port, (uint8_t)device, pseudoAddress, &data, 1);
+		if (this->i2c_device->ReadRegisterAddress16(pseudoAddress, &data, 1) != ErrorCode::OK)
+			return UINT8_MAX;
 		return data;
 	}
 
@@ -850,7 +871,8 @@ namespace DS2482
 		//  [] indicates from slave
 		//  SS indicates byte containing search direction bit value in msbit
 		uint8_t cmd[2] = {CMD_1WT, search_direction ? (uint8_t)0x80 : (uint8_t)0x00};
-		I2C::Write(i2c_port, (uint8_t)device, cmd, 2);
+		if (this->i2c_device == nullptr || this->i2c_device->WriteRaw(cmd, 2) != ErrorCode::OK)
+			return UINT8_MAX;
 
 		return pollStatus();
 	}

@@ -1,153 +1,9 @@
-
-#include <string.h>
-#include <freertos/FreeRTOS.h>
-#include <freertos/task.h>
-#include <esp_log.h>
-#include <array>
 #include "i2c.hh"
 
-static const char *TAG = "I2C_DEV";
+#include <array>
+#include <vector>
 
-SemaphoreHandle_t I2C::locks[I2C_NUM_MAX];
-
-esp_err_t I2C::Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda, int intr_alloc_flags)
-{
-    i2c_config_t conf;
-    conf.mode = I2C_MODE_MASTER;
-    conf.sda_io_num = sda;
-    conf.sda_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.scl_io_num = scl;
-    conf.scl_pullup_en = GPIO_PULLUP_ENABLE;
-    conf.master.clk_speed = 100000;
-    conf.clk_flags = 0;
-    ESP_ERROR_CHECK(i2c_param_config(port, &conf));
-    ESP_ERROR_CHECK(i2c_driver_install(port, conf.mode, 0, 0, intr_alloc_flags));
-    I2C::locks[(int)port] = xSemaphoreCreateMutex();
-    return ESP_OK;
-}
-
-iI2CPort* I2C::GetPort_DoNotForgetToDelete(const i2c_port_t port){
-        return new iI2CPort_Impl(port);
-    }
-
-esp_err_t I2C::WriteReg(const i2c_port_t port, const uint8_t address7bit, const uint8_t reg_addr, const uint8_t *const reg_data, const size_t len)
-{
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    if (!reg_data)
-    {
-        ESP_LOGE(TAG, "Data is NULL for address 0x%02X on port %d", address7bit, port);
-        return ESP_FAIL;
-    }
-    uint8_t write_buf[1+len];
-    write_buf[0]=reg_addr;
-    memcpy(write_buf+1, reg_data, len);
-    esp_err_t espRc = i2c_master_write_to_device(port, address7bit, write_buf, sizeof(write_buf), pdMS_TO_TICKS(1000));
-    xSemaphoreGive(locks[port]);
-    if (espRc != ESP_OK)
-    {
-        ESP_LOGE(TAG, "Error %d", espRc);
-    }
-    return espRc;
-}
-
-esp_err_t I2C::WriteSingleReg(const i2c_port_t port, const uint8_t address7bit, const uint8_t reg_addr, const uint8_t reg_data){
-    
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    uint8_t write_buf[2] = {reg_addr, reg_data};
-    esp_err_t ret = i2c_master_write_to_device(port, address7bit, write_buf, sizeof(write_buf), pdMS_TO_TICKS(1000));
-    xSemaphoreGive(locks[port]);
-    return ret;
-}
-
-esp_err_t I2C::WriteDoubleReg(const i2c_port_t port, const uint8_t address7bit, const uint8_t reg_addr, const uint16_t reg_data){
-    
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    uint8_t write_buf[3] = {reg_addr, (uint8_t)(reg_data>>8), (uint8_t)(reg_data & 0x00FF)};
-    esp_err_t ret = i2c_master_write_to_device(port, address7bit, write_buf, sizeof(write_buf), pdMS_TO_TICKS(1000));
-    xSemaphoreGive(locks[port]);
-    return ret;
-}
-
-esp_err_t I2C::ReadDoubleReg(const i2c_port_t port, uint8_t address7bit, uint8_t reg_addr, uint16_t *reg_data)
-{
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    uint8_t buf[2];
-    esp_err_t espRc = i2c_master_write_read_device(port, address7bit, &reg_addr, 1, buf, 2, pdMS_TO_TICKS(1000));
-    xSemaphoreGive(locks[port]);
-    *reg_data = buf[0]+(buf[1]<<8);
-    return espRc;
-}
-
-
-esp_err_t I2C::ReadReg(const i2c_port_t port, uint8_t address7bit, uint8_t reg_addr, uint8_t *reg_data, size_t len)
-{
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    esp_err_t espRc = i2c_master_write_read_device(port, address7bit, &reg_addr, 1, reg_data, len, pdMS_TO_TICKS(1000));
-    xSemaphoreGive(locks[port]);
-    return espRc;
-}
-
-esp_err_t I2C::ReadReg16(const i2c_port_t port, uint8_t address7bit, uint16_t reg_addr16, uint8_t *reg_data, size_t len)
-{
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    esp_err_t espRc;
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (address7bit << 1) | I2C_MASTER_WRITE, true);
-
-    i2c_master_write(cmd, (uint8_t *)&reg_addr16, 2, true);
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (address7bit << 1) | I2C_MASTER_READ, true);
-    i2c_master_read(cmd, reg_data, len, I2C_MASTER_LAST_NACK);
-    i2c_master_stop(cmd);
-    espRc = i2c_master_cmd_begin(port, cmd, pdMS_TO_TICKS(1000));
-    i2c_cmd_link_delete(cmd);
-    xSemaphoreGive(locks[port]);
-    return espRc;
-}
-
-esp_err_t I2C::IsAvailable(const i2c_port_t port, uint8_t address7bit)
-{
-
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    // Nothing to init. Just check if it is there...
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (address7bit << 1) | I2C_MASTER_WRITE, true);
-    i2c_master_stop(cmd);
-    esp_err_t ret = i2c_master_cmd_begin(port, cmd, pdMS_TO_TICKS(50));
-    i2c_cmd_link_delete(cmd);
-    xSemaphoreGive(locks[port]);
-    return ret;
-}
+namespace i2c {
 
 constexpr std::array<const char *, 128> address2name{
     "reserved", // 0
@@ -279,68 +135,181 @@ constexpr std::array<const char *, 128> address2name{
     "PCA9685 (res.)",
     "PCA9685 (res.)",
 };
-esp_err_t I2C::Discover(const i2c_port_t port){
-    return Discover(port, nullptr);
+
+ErrorCode iI2CDevice_Impl::ToErrorCode(esp_err_t err) {
+    return err == ESP_OK ? ErrorCode::OK : ErrorCode::DEVICE_NOT_RESPONDING;
 }
-esp_err_t I2C::Discover(const i2c_port_t port, FILE* fp)
-{
+
+iI2CDevice_Impl::iI2CDevice_Impl(i2c_master_bus_handle_t bus_handle, i2c_master_dev_handle_t dev_handle, uint8_t address7bit)
+    : bus_handle(bus_handle), dev_handle(dev_handle), address7bit(address7bit) {}
+
+ErrorCode iI2CDevice_Impl::ReadRegister(const uint8_t reg_addr, uint8_t *reg_data, size_t len) {
+    if (reg_data == nullptr || len == 0) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+    return ToErrorCode(i2c_master_transmit_receive(dev_handle, &reg_addr, 1, reg_data, len, 1000));
+}
+
+ErrorCode iI2CDevice_Impl::ReadRegisterAddress16(const uint16_t reg_addr16, uint8_t *reg_data, size_t len) {
+    if (reg_data == nullptr || len == 0) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+    uint8_t addr_bytes[2] = {
+        static_cast<uint8_t>(reg_addr16 & 0xFF),
+        static_cast<uint8_t>((reg_addr16 >> 8) & 0xFF),
+    };
+    return ToErrorCode(i2c_master_transmit_receive(dev_handle, addr_bytes, sizeof(addr_bytes), reg_data, len, 1000));
+}
+
+ErrorCode iI2CDevice_Impl::ReadRegisterU16BE(const uint8_t reg_addr, uint16_t *reg_data) {
+    if (reg_data == nullptr) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+    uint8_t tmp[2] = {0, 0};
+    esp_err_t err = i2c_master_transmit_receive(dev_handle, &reg_addr, 1, tmp, sizeof(tmp), 1000);
+    *reg_data = (static_cast<uint16_t>(tmp[0]) << 8) | static_cast<uint16_t>(tmp[1]);
+    return ToErrorCode(err);
+}
+
+ErrorCode iI2CDevice_Impl::ReadRegisterU32BE(const uint8_t reg_addr, uint32_t *reg_data) {
+    if (reg_data == nullptr) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+    uint8_t tmp[4] = {0, 0, 0, 0};
+    esp_err_t err = i2c_master_transmit_receive(dev_handle, &reg_addr, 1, tmp, sizeof(tmp), 1000);
+    *reg_data = (static_cast<uint32_t>(tmp[0]) << 24) |
+                (static_cast<uint32_t>(tmp[1]) << 16) |
+                (static_cast<uint32_t>(tmp[2]) << 8) |
+                static_cast<uint32_t>(tmp[3]);
+    return ToErrorCode(err);
+}
+
+ErrorCode iI2CDevice_Impl::ReadRaw(uint8_t *data, size_t len) {
+    if (data == nullptr || len == 0) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+    return ToErrorCode(i2c_master_receive(dev_handle, data, len, 1000));
+}
+
+ErrorCode iI2CDevice_Impl::WriteRegister(const uint8_t reg_addr, const uint8_t *const reg_data, const size_t len) {
+    if (reg_data == nullptr || len == 0) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+
+    std::vector<uint8_t> write_buf;
+    write_buf.reserve(1 + len);
+    write_buf.push_back(reg_addr);
+    write_buf.insert(write_buf.end(), reg_data, reg_data + len);
+
+    return ToErrorCode(i2c_master_transmit(dev_handle, write_buf.data(), write_buf.size(), 1000));
+}
+
+ErrorCode iI2CDevice_Impl::WriteRegisterU8(const uint8_t reg_addr, const uint8_t reg_data) {
+    uint8_t write_buf[2] = {reg_addr, reg_data};
+    return ToErrorCode(i2c_master_transmit(dev_handle, write_buf, sizeof(write_buf), 1000));
+}
+
+ErrorCode iI2CDevice_Impl::WriteRegisterU16BE(const uint8_t reg_addr, const uint16_t reg_data) {
+    uint8_t tmp[2] = {
+        static_cast<uint8_t>((reg_data >> 8) & 0xFF),
+        static_cast<uint8_t>(reg_data & 0xFF),
+    };
+    return WriteRegister(reg_addr, tmp, sizeof(tmp));
+}
+
+ErrorCode iI2CDevice_Impl::WriteRegisterU32BE(const uint8_t reg_addr, const uint32_t reg_data) {
+    uint8_t tmp[4] = {
+        static_cast<uint8_t>((reg_data >> 24) & 0xFF),
+        static_cast<uint8_t>((reg_data >> 16) & 0xFF),
+        static_cast<uint8_t>((reg_data >> 8) & 0xFF),
+        static_cast<uint8_t>(reg_data & 0xFF),
+    };
+    return WriteRegister(reg_addr, tmp, sizeof(tmp));
+}
+
+ErrorCode iI2CDevice_Impl::WriteRaw(const uint8_t *const data, const size_t len) {
+    if (data == nullptr || len == 0) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+    return ToErrorCode(i2c_master_transmit(dev_handle, data, len, 1000));
+}
+
+ErrorCode iI2CDevice_Impl::Probe() {
+    if (bus_handle == nullptr) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+    return ToErrorCode(i2c_master_probe(bus_handle, address7bit, 50));
+}
+
+ErrorCode iI2CBus_Impl::Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda, int intr_alloc_flags) {
+    i2c_master_bus_config_t bus_config = {
+        .i2c_port = static_cast<i2c_port_num_t>(port),
+        .sda_io_num = sda,
+        .scl_io_num = scl,
+        .clk_source = I2C_CLK_SRC_DEFAULT,
+        .glitch_ignore_cnt = 7,
+        .intr_priority = intr_alloc_flags,
+        .trans_queue_depth = 0,
+        .flags = {
+            .enable_internal_pullup = true,
+        },
+    };
+
+    return i2c_new_master_bus(&bus_config, &bus_handle) == ESP_OK ? ErrorCode::OK : ErrorCode::GENERIC_ERROR;
+}
+
+ErrorCode iI2CBus_Impl::SetDefaultSpeed(I2CSpeed speed) {
+    device_speed_hz = static_cast<uint32_t>(speed);
+    return ErrorCode::OK;
+}
+
+ErrorCode iI2CBus_Impl::CreateDevice(const uint8_t address7bit, iI2CDevice **device) {
+    if (device == nullptr || bus_handle == nullptr) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = address7bit,
+        .scl_speed_hz = device_speed_hz,
+    };
+
+    i2c_master_dev_handle_t dev = nullptr;
+    if (i2c_master_bus_add_device(bus_handle, &dev_cfg, &dev) != ESP_OK) {
+        return ErrorCode::DEVICE_NOT_RESPONDING;
+    }
+
+    *device = new iI2CDevice_Impl(bus_handle, dev, address7bit);
+    return ErrorCode::OK;
+}
+
+ErrorCode iI2CBus_Impl::ProbeAddress(const uint8_t address7bit) {
+    if (bus_handle == nullptr) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+    return i2c_master_probe(bus_handle, address7bit, 50) == ESP_OK ? ErrorCode::OK : ErrorCode::DEVICE_NOT_RESPONDING;
+}
+
+ErrorCode iI2CBus_Impl::Scan(FILE *fp) {
+    if (bus_handle == nullptr) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+
     int cnt = 0;
-    for (uint8_t addr = 1; addr < 128; addr++)
-    {
-        if (IsAvailable(port, addr) == ESP_OK)
-        {
-            ESP_LOGI(TAG, "Bus %d: Found %s  at 0x%02X ", (int)port, address2name[addr], addr);
-            if(fp)fprintf(fp, "Bus %d: Found %s  at 0x%02X ", (int)port, address2name[addr], addr);
-            cnt++;
+    for (uint8_t addr = 1; addr < 128; ++addr) {
+        if (i2c_master_probe(bus_handle, addr, 50) == ESP_OK) {
+            if (fp != nullptr) {
+                std::fprintf(fp, "Found %s at 0x%02X\n", address2name[addr], addr);
+            }
+            ++cnt;
         }
     }
-    ESP_LOGI(TAG, "Bus %d: %d devices found", (int)port, cnt);
-    if(fp)fprintf(fp, "Bus %d: %d devices found", (int)port, cnt);
-    return ESP_OK;
+
+    if (fp != nullptr) {
+        std::fprintf(fp, "%d devices found\n", cnt);
+    }
+
+    return ErrorCode::OK;
 }
 
-esp_err_t I2C::Read(const i2c_port_t port, uint8_t address7bit, uint8_t *data, size_t len)
-{
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    esp_err_t espRc;
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, (address7bit << 1) | I2C_MASTER_READ, true);
-    if (len > 1)
-    {
-        i2c_master_read(cmd, data, len - 1, I2C_MASTER_ACK);
-    }
-    i2c_master_read_byte(cmd, data + len - 1, I2C_MASTER_NACK);
-    i2c_master_stop(cmd);
-    espRc = i2c_master_cmd_begin(port, cmd, 10 / portTICK_PERIOD_MS);
-    i2c_cmd_link_delete(cmd);
-    xSemaphoreGive(locks[port]);
-    return espRc;
-}
-
-esp_err_t I2C::Write(const i2c_port_t port, const uint8_t address7bit, const uint8_t *const data, const size_t len)
-{
-    if (!xSemaphoreTake(locks[port], pdMS_TO_TICKS(1000)))
-    {
-        ESP_LOGE(TAG, "Could not take port mutex %d", port);
-        return ESP_ERR_TIMEOUT;
-    }
-    esp_err_t espRc;
-    i2c_cmd_handle_t cmd = i2c_cmd_link_create();
-    i2c_master_start(cmd);
-    i2c_master_write_byte(cmd, address7bit << 1 | I2C_MASTER_WRITE, true);
-    if (!data)
-    {
-        ESP_LOGE(TAG, "Data is NULL for address 0x%02X on port %d", address7bit, port);
-    }
-    i2c_master_write(cmd, data, len, true);
-    i2c_master_stop(cmd);
-    espRc = i2c_master_cmd_begin(port, cmd, pdMS_TO_TICKS(1000));
-    i2c_cmd_link_delete(cmd);
-    xSemaphoreGive(locks[port]);
-    return espRc;
-}
+} // namespace i2c

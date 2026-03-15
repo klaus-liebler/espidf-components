@@ -1,5 +1,4 @@
 #include <inttypes.h>
-#include <i2c.hh>
 #include "aht_sensor.hh"
 #include <esp_log.h>
 #include <string.h>

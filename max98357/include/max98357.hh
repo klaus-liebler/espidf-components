@@ -70,7 +70,9 @@ namespace MAX98357
 		}
 
 		ErrorCode SetPowerState(bool power) override{
-            gpio_set_level(shutdown_pin, power?0:1);
+            if(shutdown_pin != GPIO_NUM_NC){
+                gpio_set_level(shutdown_pin, power?0:1);
+            }
             return ErrorCode::OK;
 		}
 
@@ -80,8 +82,14 @@ namespace MAX98357
 			ESP_LOGI(TAG, "Setup I2S");
 			RETURN_ON_ERRORCODE(this->InitI2sEsp32(GPIO_NUM_NC, bck, ws, data));
 			ESP_LOGI(TAG, "Setup of the MAX98357 begins");
-            gpio_set_level(gain_pin, 1);
-            gpio_set_direction(shutdown_pin, GPIO_MODE_OUTPUT);
+            if(gain_pin != GPIO_NUM_NC){
+                gpio_set_level(gain_pin, 0);
+                gpio_set_direction(gain_pin, GPIO_MODE_OUTPUT);
+            }
+            if(shutdown_pin != GPIO_NUM_NC){
+                gpio_set_level(shutdown_pin, 1);
+                gpio_set_direction(shutdown_pin, GPIO_MODE_OUTPUT);
+            }
 			SetAnalogGain(eGain::GND_12dB);
 			return ErrorCode::OK;
 		}

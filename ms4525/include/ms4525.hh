@@ -1,8 +1,7 @@
 #pragma once
  
 #include <stdio.h>
-#include "driver/i2c.h"
-#include "driver/gpio.h"
+#include "i2c/interfaces.hh"
  
 /* Register address */
 constexpr uint8_t  ADDR_READ_MR=0x00;    /* write to this address to start conversion */
@@ -61,16 +60,17 @@ class MS4525DO
 {
     public:
 
-        MS4525DO(i2c_port_t i2c_port, MS4523_Adress address);
+        MS4525DO(i2c::iI2CBus* i2c_bus, MS4523_Adress address);
         ~MS4525DO();
-        esp_err_t Init(void);
-        esp_err_t Read(void);              // returns status of measurement
+        ErrorCode Init(void);
+        ErrorCode Read(void);              // returns status of measurement
         float GetPSI(void);             // returns the PSI of last measurement
         float GetTemperature(void);     // returns temperature of last measurement
         float GetAirSpeedMetersPerSecond(void);        // calculates and returns the airspeed
         MS4525_Status GetStatus();
     private:
-        i2c_port_t i2c_port;
+        i2c::iI2CBus* i2c_bus;
+        i2c::iI2CDevice* i2c_device;
         uint8_t address;
         MS4525_Status _status= MS4525_Status::Reserved;
         uint16_t    P_dat;  // 14 bit pressure data

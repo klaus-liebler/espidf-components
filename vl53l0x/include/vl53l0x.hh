@@ -1,7 +1,6 @@
 #pragma once
 #include <stdio.h>
 #include <stdint.h>
-#include <i2c.hh>
 #include <i2c_sensor.hh>
 
 namespace VL53L0X

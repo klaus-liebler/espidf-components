@@ -6,6 +6,7 @@
 #include <esp_log.h>
 #include <math.h>
 #include <codec_manager.hh>
+#include <i2c/interfaces.hh>
 #define TAG "TAS580x"
 
 namespace TAS580x
@@ -101,7 +102,8 @@ namespace TAS580x
 	class M:public CodecManager::I2sWithHardwareVolume
 	{
 	private:
-		iI2CPort *i2c_port;
+		i2c::iI2CBus* i2c_bus;
+		i2c::iI2CDevice* i2c_device;
 		TAS580x::ADDR7bit addr;
 		gpio_num_t power_down;
 		gpio_num_t mclk;
@@ -109,9 +111,23 @@ namespace TAS580x
 		gpio_num_t ws;
 		gpio_num_t data;
 		uint8_t initialVolume=50;
+
+		ErrorCode EnsureI2CDevice()
+		{
+			if (i2c_device != nullptr)
+			{
+				return ErrorCode::OK;
+			}
+			if (i2c_bus == nullptr)
+			{
+				return ErrorCode::INVALID_ARGUMENT_VALUES;
+			}
+			return i2c_bus->CreateDevice((uint8_t)this->addr, &i2c_device);
+		}
 		
 		ErrorCode transmitRegisters(const CFG::tas5805m_cfg_reg_t *conf_buf, int size)
 		{
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
 			int i = 0;
 			while (i < size)
 			{
@@ -124,11 +140,11 @@ namespace TAS580x
 					vTaskDelay(pdMS_TO_TICKS(conf_buf[i].value));
 					break;
 				case CFG::META_BURST:
-					RETURN_ON_ERRORCODE(i2c_port->WriteReg((uint8_t)this->addr, conf_buf[i + 1].offset, (unsigned char *)(&conf_buf[i + 1].value), conf_buf[i].value));
+					RETURN_ON_ERRORCODE(i2c_device->WriteRegister(conf_buf[i + 1].offset, (unsigned char *)(&conf_buf[i + 1].value), conf_buf[i].value));
 					i += (conf_buf[i].value / 2) + 1;
 					break;
 				default:
-					RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, conf_buf[i].offset, conf_buf[i].value));
+					RETURN_ON_ERRORCODE(i2c_device->WriteRegisterU8(conf_buf[i].offset, conf_buf[i].value));
 					break;
 				}
 				i++;
@@ -137,15 +153,16 @@ namespace TAS580x
 		}
 
 		ErrorCode SwitchToBookAndPage(uint8_t book, uint8_t page){
-			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, 0));
-			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SELECT_BOOK, book));
-			RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg((uint8_t)this->addr, R::SELECT_PAGE, page));
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
+			RETURN_ON_ERRORCODE(i2c_device->WriteRegisterU8(R::SELECT_PAGE, 0));
+			RETURN_ON_ERRORCODE(i2c_device->WriteRegisterU8(R::SELECT_BOOK, book));
+			RETURN_ON_ERRORCODE(i2c_device->WriteRegisterU8(R::SELECT_PAGE, page));
 			return ErrorCode::OK;
 		}
 
 	public:
 		M(
-			iI2CPort *i2c_port, 
+			i2c::iI2CBus* i2c_bus,
 			TAS580x::ADDR7bit addr, 
 			gpio_num_t power_down,
 			gpio_num_t mclk,
@@ -153,30 +170,34 @@ namespace TAS580x
 			gpio_num_t ws, 
 			gpio_num_t data,
 			uint8_t initialVolume=50
-			) : i2c_port(i2c_port), addr(addr), power_down(power_down), mclk(mclk), bck(bck), ws(ws), data(data), initialVolume(initialVolume)
+			) : i2c_bus(i2c_bus), i2c_device(nullptr), addr(addr), power_down(power_down), mclk(mclk), bck(bck), ws(ws), data(data), initialVolume(initialVolume)
 		{
 		}
 		
 		// 0b00000=0dB, 0b11111=-15.5dB
 		ErrorCode SetAnalogGain(uint8_t gain_0to31=0x00)
 		{
-			return i2c_port->WriteSingleReg((uint8_t)this->addr, R::AGAIN, gain_0to31 & 0x1F);
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
+			return i2c_device->WriteRegisterU8(R::AGAIN, gain_0to31 & 0x1F);
 		}
 		// 0=MAX Volume, 254=MIN Volume, 255=Mute, 50 is loud, 120 is quiet
 		ErrorCode SetDigitalVolume(uint8_t volume = 0b00110000)
 		{
 			ESP_LOGI(TAG, "SetDigitalVolume: Writing %02X to DIG_VOL_CTRL", volume);
-			return i2c_port->WriteSingleReg((uint8_t)this->addr, R::DIG_VOL_CTRL, volume);
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
+			return i2c_device->WriteRegisterU8(R::DIG_VOL_CTRL, volume);
 		}
 
 		ErrorCode GetDigitalVolume(uint8_t *volume)
 		{
-			return i2c_port->ReadReg((uint8_t)this->addr, R::DIG_VOL_CTRL, volume, 1);
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
+			return i2c_device->ReadRegister(R::DIG_VOL_CTRL, volume, 1);
 		}
 
 		ErrorCode SetPowerState(bool power) override{
 			uint8_t reg = 0;
-			RETURN_ON_ERRORCODE(i2c_port->ReadReg((uint8_t)this->addr, R::DEVICE_CTRL_2, &reg, 1));
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
+			RETURN_ON_ERRORCODE(i2c_device->ReadRegister(R::DEVICE_CTRL_2, &reg, 1));
 			if((power && ((reg&0x03)==0x03)) || (!power && ((reg&0x03)==0x00))){
 				//if power setting is as we want to have it --> return!
 				return ErrorCode::OK;
@@ -191,7 +212,7 @@ namespace TAS580x
 			}
 			
 			ESP_LOGI(TAG, "SetPowerState: Writing %02X to DEVICE_CTRL_2", reg);
-			return i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, reg);
+			return i2c_device->WriteRegisterU8(R::DEVICE_CTRL_2, reg);
 		}
         
 		ErrorCode SetVolume(uint8_t volume) override{
@@ -210,9 +231,10 @@ namespace TAS580x
 
 		ErrorCode SetControlState(CTRL_STATE state){
 			uint8_t reg = 0;
-			RETURN_ON_ERRORCODE(i2c_port->ReadReg((uint8_t)this->addr, R::DEVICE_CTRL_2, &reg, 1));
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
+			RETURN_ON_ERRORCODE(i2c_device->ReadRegister(R::DEVICE_CTRL_2, &reg, 1));
 			reg = (reg && 0xFC)|(uint8_t)state;
-			return i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, reg);
+			return i2c_device->WriteRegisterU8(R::DEVICE_CTRL_2, reg);
 		}
 
 		ErrorCode Init()
@@ -247,14 +269,16 @@ namespace TAS580x
 		{
 			uint8_t fade_reg = (uint8_t)fadingTimeMs;
 			fade_reg |= (fade_reg << 4);
-			ErrorCode ret = i2c_port->WriteSingleReg((uint8_t)this->addr, R::MUTE_TIME_REG_ADDR, fade_reg);
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
+			ErrorCode ret = i2c_device->WriteRegisterU8(R::MUTE_TIME_REG_ADDR, fade_reg);
 			return ret;
 		}
 
 		ErrorCode Mute(bool mute)
 		{
 			uint8_t mute_reg = 0;
-			RETURN_ON_ERRORCODE(i2c_port->ReadReg((uint8_t)this->addr, R::DEVICE_CTRL_2, &mute_reg, 1));
+			RETURN_ON_ERRORCODE(EnsureI2CDevice());
+			RETURN_ON_ERRORCODE(i2c_device->ReadRegister(R::DEVICE_CTRL_2, &mute_reg, 1));
 			if (mute)
 			{
 				mute_reg |= 0x8;
@@ -263,7 +287,7 @@ namespace TAS580x
 			{
 				mute_reg &= (~0x08);
 			}
-			return i2c_port->WriteSingleReg((uint8_t)this->addr, R::DEVICE_CTRL_2, mute_reg);
+			return i2c_device->WriteRegisterU8(R::DEVICE_CTRL_2, mute_reg);
 		}
 	};
 }

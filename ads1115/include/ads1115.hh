@@ -1,8 +1,7 @@
 #pragma once
 
 #include <stdio.h>
-#include "driver/i2c.h"
-#include "driver/gpio.h"
+#include "i2c/interfaces.hh"
 
 enum class ads1115_register_addresses_t
 { // register address
@@ -77,16 +76,15 @@ class ADS1115
 {
 private:
     ADS1115_CONFIG_REGISTER_Type config;
-    i2c_port_t i2c_port;
-    int address;
-    esp_err_t write_register(ads1115_register_addresses_t reg, uint16_t data);
-    esp_err_t read_register(ads1115_register_addresses_t reg, uint8_t *data, uint8_t len);
+    i2c::iI2CBus* i2c_bus;
+    i2c::iI2CDevice* i2c_device;
+    uint8_t address;
 public:
-    ADS1115(const i2c_port_t i2c_port, const uint8_t address);
+    ADS1115(i2c::iI2CBus* i2c_bus, uint8_t address);
     ~ADS1115() {}
     // set configuration
-    esp_err_t Init(ads1115_sps_t dr, int64_t *howLongToWaitForResultMilliseconds);
-    esp_err_t TriggerMeasurement(ads1115_mux_t mux);
-    esp_err_t GetRaw(int16_t *val);    // get voltage in bits
-    esp_err_t GetVoltage(float *val); // get voltage in volts
+    ErrorCode Init(ads1115_sps_t dr, int64_t *howLongToWaitForResultMilliseconds);
+    ErrorCode TriggerMeasurement(ads1115_mux_t mux);
+    ErrorCode GetRaw(int16_t *val);    // get voltage in bits
+    ErrorCode GetVoltage(float *val); // get voltage in volts
 };

@@ -2,7 +2,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
-#include <i2c.hh>
+#include <i2c/interfaces.hh>
 #include <i2c_sensor.hh>
 #include <common-esp32.hh>
 
@@ -106,7 +106,8 @@ namespace MPU6050
     class M
     {
     private:
-        iI2CPort *i2c_port;
+        i2c::iI2CBus* i2c_bus;
+        i2c::iI2CDevice* i2c_device;
         uint8_t address;
         gpio_num_t interrupt_pin;
         uint32_t counter;
@@ -115,37 +116,54 @@ namespace MPU6050
         float acce_sensitivity;
         float gyro_sensitivity;
 
+        ErrorCode EnsureI2CDevice()
+        {
+            if (i2c_device != nullptr)
+            {
+                return ErrorCode::OK;
+            }
+            if (i2c_bus == nullptr)
+            {
+                return ErrorCode::INVALID_ARGUMENT_VALUES;
+            }
+            return i2c_bus->CreateDevice(address, &i2c_device);
+        }
+
     public:
-        M(iI2CPort *i2c_port, I2C_ADDRESS address = I2C_ADDRESS::AD0_LOW, gpio_num_t interrupt_pin = GPIO_NUM_NC) : i2c_port(i2c_port), address((uint8_t)address), interrupt_pin(interrupt_pin), counter(0), dt(0)
+        M(i2c::iI2CBus* i2c_bus, I2C_ADDRESS address = I2C_ADDRESS::AD0_LOW, gpio_num_t interrupt_pin = GPIO_NUM_NC) : i2c_bus(i2c_bus), i2c_device(nullptr), address((uint8_t)address), interrupt_pin(interrupt_pin), counter(0), dt(0)
         {
             timer = (struct timeval *)calloc(1, sizeof(struct timeval));
         }
 
         ErrorCode GetDeviceId(uint8_t *const deviceid)
         {
-            return i2c_port->ReadReg(address, MPU6050_WHO_AM_I, deviceid, 1);
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            return i2c_device->ReadRegister(MPU6050_WHO_AM_I, deviceid, 1);
         }
 
         ErrorCode WakeUp()
         {
             uint8_t tmp;
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address, MPU6050_PWR_MGMT_1, &tmp, 1));
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            RETURN_ON_ERRORCODE(i2c_device->ReadRegister(MPU6050_PWR_MGMT_1, &tmp, 1));
             tmp &= (~BIT6);
-            return i2c_port->WriteSingleReg(address, MPU6050_PWR_MGMT_1, tmp);
+            return i2c_device->WriteRegisterU8(MPU6050_PWR_MGMT_1, tmp);
         }
 
         ErrorCode Sleep()
         {
             uint8_t tmp;
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address, MPU6050_PWR_MGMT_1, &tmp, 1));
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            RETURN_ON_ERRORCODE(i2c_device->ReadRegister(MPU6050_PWR_MGMT_1, &tmp, 1));
             tmp |= BIT6;
-            return i2c_port->WriteSingleReg(address, MPU6050_PWR_MGMT_1, tmp);
+            return i2c_device->WriteRegisterU8(MPU6050_PWR_MGMT_1, tmp);
         }
 
         ErrorCode Config(const ACCELERATION_FS acce_fs, const GYRO_FS gyro_fs)
         {
             uint8_t config_regs[2] = {(uint8_t)((uint8_t)gyro_fs << 3), (uint8_t)((uint8_t)acce_fs << 3)};
-            RETURN_ON_ERRORCODE(i2c_port->WriteReg(address, MPU6050_GYRO_CONFIG, config_regs, 2));
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            RETURN_ON_ERRORCODE(i2c_device->WriteRegister(MPU6050_GYRO_CONFIG, config_regs, 2));
             switch (acce_fs)
             {
             case ACCELERATION_FS::_2G:
@@ -197,7 +215,8 @@ namespace MPU6050
 
             uint8_t int_pin_cfg = 0x00;
 
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address, MPU6050_INTR_PIN_CFG, &int_pin_cfg, 1));
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            RETURN_ON_ERRORCODE(i2c_device->ReadRegister(MPU6050_INTR_PIN_CFG, &int_pin_cfg, 1));
 
             if (INTERRUPT_PIN_ACTIVE_LEVEL::LOW == activeLevel)
             {
@@ -218,7 +237,7 @@ namespace MPU6050
             {
                 int_pin_cfg |= BIT4;
             }
-            RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg(address, MPU6050_INTR_PIN_CFG, int_pin_cfg));
+            RETURN_ON_ERRORCODE(i2c_device->WriteRegisterU8(MPU6050_INTR_PIN_CFG, int_pin_cfg));
 
             gpio_int_type_t gpio_intr_type = INTERRUPT_PIN_ACTIVE_LEVEL::LOW == activeLevel ? GPIO_INTR_NEGEDGE : GPIO_INTR_POSEDGE;
 
@@ -238,20 +257,26 @@ namespace MPU6050
 
             uint8_t enabled_interrupts = 0x00;
 
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address, MPU6050_INTR_ENABLE, &enabled_interrupts, 1));
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            RETURN_ON_ERRORCODE(i2c_device->ReadRegister(MPU6050_INTR_ENABLE, &enabled_interrupts, 1));
 
             if (enabled_interrupts != interrupt_sources)
             {
 
                 enabled_interrupts |= interrupt_sources;
-                RETURN_ON_ERRORCODE(i2c_port->WriteSingleReg(address, MPU6050_INTR_ENABLE, enabled_interrupts));
+                RETURN_ON_ERRORCODE(i2c_device->WriteRegisterU8(MPU6050_INTR_ENABLE, enabled_interrupts));
             }
 
             return ErrorCode::OK;
         }
         ErrorCode GetInterruptStatus(uint8_t *const out_intr_status)
         {
-            return NULL == out_intr_status ? ErrorCode::INVALID_ARGUMENT_VALUES : i2c_port->ReadReg(address, MPU6050_INTR_STATUS, out_intr_status, 1);
+            if (NULL == out_intr_status)
+            {
+                return ErrorCode::INVALID_ARGUMENT_VALUES;
+            }
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            return i2c_device->ReadRegister(MPU6050_INTR_STATUS, out_intr_status, 1);
         }
 
         bool IsDataReadyInterrupt(uint8_t interrupt_status)
@@ -270,7 +295,8 @@ namespace MPU6050
         ErrorCode GetRawAcce(xyz_i16 *const raw_acce_value)
         {
             uint8_t data_rd[6];
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address, MPU6050_ACCEL_XOUT_H, data_rd, sizeof(data_rd)));
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            RETURN_ON_ERRORCODE(i2c_device->ReadRegister(MPU6050_ACCEL_XOUT_H, data_rd, sizeof(data_rd)));
             raw_acce_value->x = (int16_t)((data_rd[0] << 8) + (data_rd[1]));
             raw_acce_value->y = (int16_t)((data_rd[2] << 8) + (data_rd[3]));
             raw_acce_value->z = (int16_t)((data_rd[4] << 8) + (data_rd[5]));
@@ -279,7 +305,8 @@ namespace MPU6050
         ErrorCode GetRawGyro(xyz_i16 *const raw_gyro_value)
         {
             uint8_t data_rd[6];
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address, MPU6050_GYRO_XOUT_H, data_rd, sizeof(data_rd)));
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            RETURN_ON_ERRORCODE(i2c_device->ReadRegister(MPU6050_GYRO_XOUT_H, data_rd, sizeof(data_rd)));
 
             raw_gyro_value->x = (int16_t)((data_rd[0] << 8) + (data_rd[1]));
             raw_gyro_value->y = (int16_t)((data_rd[2] << 8) + (data_rd[3]));
@@ -310,7 +337,8 @@ namespace MPU6050
         ErrorCode GetTemp(float *const temp_value)
         {
             uint8_t data_rd[2];
-            RETURN_ON_ERRORCODE(i2c_port->ReadReg(address, MPU6050_TEMP_XOUT_H, data_rd, sizeof(data_rd)));
+            RETURN_ON_ERRORCODE(EnsureI2CDevice());
+            RETURN_ON_ERRORCODE(i2c_device->ReadRegister(MPU6050_TEMP_XOUT_H, data_rd, sizeof(data_rd)));
             *temp_value = (int16_t)((data_rd[0] << 8) | (data_rd[1])) / 340.00 + 36.53;
             return ErrorCode::OK;
         }

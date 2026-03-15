@@ -19,7 +19,6 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include <driver/i2c.h>
-#include <i2c.hh>
 #include <esp_log.h>
 #include <esp_timer.h>
 #include "PD_UFP.h"
@@ -54,7 +53,9 @@ enum {
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 // PD_UFP_core_c
 ///////////////////////////////////////////////////////////////////////////////////////////////////
-PD_UFP_core_c::PD_UFP_core_c():
+PD_UFP_core_c* PD_UFP_core_c::active_instance = nullptr;
+
+PD_UFP_core_c::PD_UFP_core_c(i2c::iI2CBus* i2c_bus):
     ready_voltage(0),
     ready_current(0),
     PPS_voltage_next(0),
@@ -69,8 +70,11 @@ PD_UFP_core_c::PD_UFP_core_c():
     get_src_cap_retry_count(0),
     wait_src_cap(0),
     wait_ps_rdy(0),
-    send_request(0)
+    send_request(0),
+    i2c_bus(i2c_bus),
+    i2c_device(nullptr)
 {
+    active_instance = this;
     memset(&FUSB302, 0, sizeof(FUSB302_dev_t));
     memset(&protocol, 0, sizeof(PD_protocol_t));
 }
@@ -82,9 +86,22 @@ void PD_UFP_core_c::init(enum PD_power_option_t power_option)
 
 void PD_UFP_core_c::init_PPS(uint16_t PPS_voltage, uint8_t PPS_current, enum PD_power_option_t power_option)
 {
+    if (this->i2c_bus == nullptr)
+    {
+        ESP_LOGE(TAG, "USBPD init failed: i2c bus is null");
+        return;
+    }
+
     // Initialize FUSB302
     gpio_set_pull_mode(PIN_FUSB302_INT, GPIO_PULLUP_ONLY);// Set FUSB302 int pin input ant pull up
     FUSB302.i2c_address = 0x22;
+
+    if (this->i2c_device == nullptr && this->i2c_bus->CreateDevice(FUSB302.i2c_address, &this->i2c_device) != ErrorCode::OK)
+    {
+        ESP_LOGE(TAG, "USBPD init failed: unable to create I2C device");
+        return;
+    }
+
     FUSB302.i2c_read = FUSB302_i2c_read;
     FUSB302.i2c_write = FUSB302_i2c_write;
     FUSB302.delay_ms = FUSB302_delay_ms;
@@ -151,12 +168,22 @@ void PD_UFP_core_c::clock_prescale_set(uint8_t prescaler)
 
 FUSB302_ret_t PD_UFP_core_c::FUSB302_i2c_read(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint8_t count)
 {
-    return I2C::ReadReg(I2C_NUM_1, dev_addr, reg_addr, data, count)==ESP_OK?FUSB302_SUCCESS:FUSB302_ERR_READ_DEVICE;
+    (void)dev_addr;
+    if (active_instance == nullptr || active_instance->i2c_device == nullptr)
+    {
+        return FUSB302_ERR_READ_DEVICE;
+    }
+    return active_instance->i2c_device->ReadRegister(reg_addr, data, count) == ErrorCode::OK ? FUSB302_SUCCESS : FUSB302_ERR_READ_DEVICE;
 }
 
 FUSB302_ret_t PD_UFP_core_c::FUSB302_i2c_write(uint8_t dev_addr, uint8_t reg_addr, uint8_t *data, uint8_t count)
 {
-    return I2C::WriteReg(I2C_NUM_1, dev_addr, reg_addr, data, count)==ESP_OK?FUSB302_SUCCESS:FUSB302_ERR_READ_DEVICE;
+    (void)dev_addr;
+    if (active_instance == nullptr || active_instance->i2c_device == nullptr)
+    {
+        return FUSB302_ERR_READ_DEVICE;
+    }
+    return active_instance->i2c_device->WriteRegister(reg_addr, data, count) == ErrorCode::OK ? FUSB302_SUCCESS : FUSB302_ERR_READ_DEVICE;
 }
 
 FUSB302_ret_t PD_UFP_core_c::FUSB302_delay_ms(uint32_t t)

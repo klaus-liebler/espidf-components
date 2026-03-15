@@ -1,6 +1,7 @@
 #pragma once
 
 #include <stdint.h>
+#include <i2c/interfaces.hh>
 
 
 extern "C" {
@@ -27,7 +28,7 @@ typedef uint8_t status_power_t;
 class PD_UFP_core_c
 {
     public:
-        PD_UFP_core_c();
+        PD_UFP_core_c(i2c::iI2CBus* i2c_bus);
         // Init
         void init(enum PD_power_option_t power_option = PD_POWER_OPTION_MAX_5V);
         void init_PPS(uint16_t PPS_voltage, uint8_t PPS_current, enum PD_power_option_t power_option = PD_POWER_OPTION_MAX_5V);
@@ -84,6 +85,11 @@ class PD_UFP_core_c
         uint16_t clock_ms(void);
         // Status logging
         virtual void status_log_event(uint8_t status, uint32_t * obj = 0) {}
+
+    private:
+        i2c::iI2CBus* i2c_bus;
+        i2c::iI2CDevice* i2c_device;
+        static PD_UFP_core_c* active_instance;
 };
 
 

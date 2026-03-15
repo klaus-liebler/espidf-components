@@ -1,7 +1,6 @@
 // Most of the functionality is based on https://github.com/pololu/vl53l0x-arduino
 #include <stdio.h>
 #include <stdint.h>
-#include <i2c.hh>
 #include <esp_timer.h>
 #include "vl53l0x.hh"
 

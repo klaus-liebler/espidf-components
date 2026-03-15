@@ -1,5 +1,5 @@
 #pragma once
-#include <driver/i2c.h>
+#include <i2c/interfaces.hh>
 #include <errorcodes.hh>
 
 
@@ -66,7 +66,8 @@ namespace DS2482
   class M
   {
   private:
-    i2c_port_t i2c_port;
+    i2c::iI2CBus* i2c_bus;
+    i2c::iI2CDevice* i2c_device;
     Device device;
     uint8_t currCfg;
     bool LastDeviceFlag;
@@ -117,7 +118,7 @@ namespace DS2482
     bool OWWriteBytePower(uint8_t sendbyte);
     bool OWReadBitPower(bool applyPowerResponse);
 
-    M(i2c_port_t i2c_port, Device device): i2c_port(i2c_port), device(device), currCfg(0), LastDeviceFlag(false), LastDiscrepancy(0), LastFamilyDiscrepancy(0), alarmOnly(false), short_detected(0)
+    M(i2c::iI2CBus* i2c_bus, Device device): i2c_bus(i2c_bus), i2c_device(nullptr), device(device), currCfg(0), LastDeviceFlag(false), LastDiscrepancy(0), LastFamilyDiscrepancy(0), alarmOnly(false), short_detected(0)
     {
     }
 

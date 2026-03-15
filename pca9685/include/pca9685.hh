@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include <driver/i2c.h>
+#include <driver/i2c_master.h>
 #include <errorcodes.hh>
 #include <array>
 #include <common.hh>
@@ -155,13 +155,13 @@ namespace PCA9685
   class M
   {
   public:                                                                                                                  
-    M(iI2CPort* i2cPort, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
-    ErrorCode Setup();
-	  static ErrorCode SoftwareReset(iI2CPort* i2cPort);
+    M(Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
+    ErrorCode Setup(i2c_master_bus_handle_t master_bus_handle);
+    static ErrorCode SoftwareReset(i2c_master_bus_handle_t master_bus_handle);
 	  ErrorCode SetOutput(Output Output, uint16_t OnValue, uint16_t OffValue);
-	  static ErrorCode SetupStatic(iI2CPort* i2cPort, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
-	  static ErrorCode SetOutputs(iI2CPort* i2cPort, Device device, uint16_t mask, uint16_t dutyCycle);
-	  static ErrorCode SetAllOutputs(iI2CPort* i2cPort, Device device, uint16_t dutyCycle);
+    static ErrorCode SetupStatic(i2c_master_bus_handle_t master_bus_handle, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
+    static ErrorCode SetOutputs(i2c_master_bus_handle_t master_bus_handle, Device device, uint16_t mask, uint16_t dutyCycle);
+    static ErrorCode SetAllOutputs(i2c_master_bus_handle_t master_bus_handle, Device device, uint16_t dutyCycle);
 	  ErrorCode SetOutputFull(Output Output, bool on);
 	  ErrorCode SetAll(uint16_t OnValue, uint16_t OffValue);
 	  ErrorCode SetDutyCycleForOutput(Output Output, uint16_t val);
@@ -177,7 +177,8 @@ namespace PCA9685
       return (uint8_t)this->device;
     }
   private:
-  	iI2CPort* i2cPort;
+    i2c_master_bus_handle_t master_bus_handle;
+    i2c_master_dev_handle_t dev_handle;
 	  Device device;
 	  InvOutputs inv;
 	  OutputDriver outdrv;

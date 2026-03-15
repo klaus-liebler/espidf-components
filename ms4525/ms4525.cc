@@ -4,17 +4,29 @@
 #include "freertos/queue.h"
 #include "esp_log.h"
 #include "math.h"
-#include <i2c.hh>
 
 
-MS4525DO::MS4525DO(i2c_port_t i2c_port, MS4523_Adress address):i2c_port(i2c_port), address((uint8_t)address)
+MS4525DO::MS4525DO(i2c::iI2CBus* i2c_bus, MS4523_Adress address)
+    : i2c_bus(i2c_bus), i2c_device(nullptr), address((uint8_t)address)
 {
 }
 
  
-esp_err_t MS4525DO::Init()
+ErrorCode MS4525DO::Init()
 {
-    return I2C::IsAvailable(this->i2c_port, this->address);
+    if (this->i2c_bus == nullptr) {
+        return ErrorCode::INVALID_ARGUMENT_VALUES;
+    }
+
+    if (this->i2c_device == nullptr && this->i2c_bus->CreateDevice(this->address, &this->i2c_device) != ErrorCode::OK) {
+        return ErrorCode::DEVICE_NOT_RESPONDING;
+    }
+
+    if (this->i2c_device == nullptr) {
+        return ErrorCode::DEVICE_NOT_RESPONDING;
+    }
+
+    return this->i2c_device->Probe();
 }
  
 
@@ -23,15 +35,21 @@ esp_err_t MS4525DO::Init()
      return _status;
  }
  
-esp_err_t MS4525DO::Read()
+ErrorCode MS4525DO::Read()
 {
     uint8_t Press_H;
     uint8_t Press_L;
     uint8_t Temp_H;
     uint8_t Temp_L;
     uint8_t data[4];
-    esp_err_t ret = I2C::Read(this->i2c_port, this->address, data, 4);
-    if(ret!=ESP_OK) return ret;
+    if (this->i2c_device == nullptr) {
+        return ErrorCode::NOT_YET_INITIALIZED;
+    }
+
+    ErrorCode ret = this->i2c_device->ReadRaw(data, 4);
+    if (ret != ErrorCode::OK) {
+        return ret;
+    }
     Press_H = data[0];
     Press_L = data[1];
     Temp_H = data[2];
