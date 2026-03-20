@@ -79,9 +79,7 @@ namespace MAX98357
         
 		ErrorCode Init(gpio_num_t bck, gpio_num_t ws, gpio_num_t data)
 		{
-			ESP_LOGI(TAG, "Setup I2S");
 			RETURN_ON_ERRORCODE(this->InitI2sEsp32(GPIO_NUM_NC, bck, ws, data));
-			ESP_LOGI(TAG, "Setup of the MAX98357 begins");
             if(gain_pin != GPIO_NUM_NC){
                 gpio_set_level(gain_pin, 0);
                 gpio_set_direction(gain_pin, GPIO_MODE_OUTPUT);

@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include <driver/i2c_master.h>
+#include <i2c/interfaces.hh>
 #include <errorcodes.hh>
 #include <array>
 #include <common.hh>
@@ -156,12 +156,12 @@ namespace PCA9685
   {
   public:                                                                                                                  
     M(Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
-    ErrorCode Setup(i2c_master_bus_handle_t master_bus_handle);
-    static ErrorCode SoftwareReset(i2c_master_bus_handle_t master_bus_handle);
+    ErrorCode Setup(i2c::iI2CBus* i2c_bus);
+    static ErrorCode SoftwareReset(i2c::iI2CBus* i2c_bus);
 	  ErrorCode SetOutput(Output Output, uint16_t OnValue, uint16_t OffValue);
-    static ErrorCode SetupStatic(i2c_master_bus_handle_t master_bus_handle, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
-    static ErrorCode SetOutputs(i2c_master_bus_handle_t master_bus_handle, Device device, uint16_t mask, uint16_t dutyCycle);
-    static ErrorCode SetAllOutputs(i2c_master_bus_handle_t master_bus_handle, Device device, uint16_t dutyCycle);
+    static ErrorCode SetupStatic(i2c::iI2CBus* i2c_bus, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq);
+    static ErrorCode SetOutputs(i2c::iI2CBus* i2c_bus, Device device, uint16_t mask, uint16_t dutyCycle);
+    static ErrorCode SetAllOutputs(i2c::iI2CBus* i2c_bus, Device device, uint16_t dutyCycle);
 	  ErrorCode SetOutputFull(Output Output, bool on);
 	  ErrorCode SetAll(uint16_t OnValue, uint16_t OffValue);
 	  ErrorCode SetDutyCycleForOutput(Output Output, uint16_t val);
@@ -177,8 +177,8 @@ namespace PCA9685
       return (uint8_t)this->device;
     }
   private:
-    i2c_master_bus_handle_t master_bus_handle;
-    i2c_master_dev_handle_t dev_handle;
+  i2c::iI2CBus* i2c_bus;
+  i2c::iI2CDevice* i2c_device;
 	  Device device;
 	  InvOutputs inv;
 	  OutputDriver outdrv;

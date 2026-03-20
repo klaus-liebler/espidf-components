@@ -1,6 +1,6 @@
 #pragma once
 #include <stdint.h>
-#include <driver/i2c_master.h>
+#include <i2c/interfaces.hh>
 #include <errorcodes.hh>
 
 namespace PCA9555
@@ -35,15 +35,15 @@ namespace PCA9555
   class M
   {
   private:
-    i2c_master_bus_handle_t master_bus_handle;
-    i2c_master_dev_handle_t dev_handle;
+    i2c::iI2CBus* i2c_bus;
+    i2c::iI2CDevice* i2c_device;
     Device device;
     uint16_t cachedInput;
     uint16_t configurationRegister;
     uint16_t polarityInversionRegister;
   public:
     M(Device device, uint16_t initialInputValue=0, uint16_t configurationRegister=0xFFFF, uint16_t polarityInversionRegister=0x0000);
-    ErrorCode Setup(i2c_master_bus_handle_t master_bus_handle);
+    ErrorCode Setup(i2c::iI2CBus* i2c_bus);
     uint16_t GetCachedInput(void);
     ErrorCode Update(void);
     ErrorCode SetOutput(uint16_t output);

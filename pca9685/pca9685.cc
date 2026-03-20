@@ -7,90 +7,73 @@
 
 namespace PCA9685
 {
-	static constexpr uint32_t I2C_TIMEOUT_MS = 1000;
-	static constexpr uint32_t I2C_SCL_SPEED_HZ = 100000;
-
-	static ErrorCode EnsureDeviceHandle(i2c_master_bus_handle_t master_bus_handle, Device device, i2c_master_dev_handle_t &dev_handle)
+	static ErrorCode EnsureDevice(i2c::iI2CBus* i2c_bus, Device device, i2c::iI2CDevice* &i2c_device)
 	{
-		if (master_bus_handle == nullptr)
+		if (i2c_bus == nullptr)
 		{
 			ESP_LOGE(TAG, "I2C bus handle is null");
 			return ErrorCode::GENERIC_ERROR;
 		}
-		if (dev_handle != nullptr)
+		if (i2c_device != nullptr)
 		{
 			return ErrorCode::OK;
 		}
 
 		const uint8_t address = (uint8_t)device;
-		esp_err_t rc = i2c_master_probe(master_bus_handle, address, I2C_TIMEOUT_MS);
-		if (rc != ESP_OK)
+		if (i2c_bus->ProbeAddress(address) != ErrorCode::OK)
 		{
-			ESP_LOGW(TAG, "Device 0x%02X not available, err=%d", address, rc);
+			ESP_LOGW(TAG, "Device 0x%02X not available", address);
 			return ErrorCode::DEVICE_NOT_RESPONDING;
 		}
 
-		i2c_device_config_t dev_cfg = {
-			.dev_addr_length = I2C_ADDR_BIT_LEN_7,
-			.device_address = address,
-			.scl_speed_hz = I2C_SCL_SPEED_HZ,
-		};
-		rc = i2c_master_bus_add_device(master_bus_handle, &dev_cfg, &dev_handle);
-		if (rc != ESP_OK)
+		if (i2c_bus->CreateDevice(address, &i2c_device) != ErrorCode::OK)
 		{
-			ESP_LOGE(TAG, "Could not add I2C device 0x%02X, err=%d", address, rc);
+			ESP_LOGE(TAG, "Could not create I2C device 0x%02X", address);
 			return ErrorCode::DEVICE_NOT_RESPONDING;
 		}
 		return ErrorCode::OK;
 	}
 
-	static ErrorCode WriteReg(i2c_master_dev_handle_t dev_handle, uint8_t reg, const uint8_t *data, size_t len)
+	static ErrorCode WriteReg(i2c::iI2CDevice* i2c_device, uint8_t reg, const uint8_t *data, size_t len)
 	{
-		if (dev_handle == nullptr || data == nullptr)
+		if (i2c_device == nullptr || data == nullptr)
 		{
 			return ErrorCode::GENERIC_ERROR;
 		}
-		if (len > 64)
+		return i2c_device->WriteRegister(reg, data, len);
+	}
+
+	static ErrorCode WriteSingleReg(i2c::iI2CDevice* i2c_device, uint8_t reg, uint8_t value)
+	{
+		if (i2c_device == nullptr)
 		{
-			return ErrorCode::INDEX_OUT_OF_BOUNDS;
+			return ErrorCode::GENERIC_ERROR;
 		}
-
-		uint8_t txbuf[65];
-		txbuf[0] = reg;
-		memcpy(txbuf + 1, data, len);
-		esp_err_t rc = i2c_master_transmit(dev_handle, txbuf, len + 1, I2C_TIMEOUT_MS);
-		return rc == ESP_OK ? ErrorCode::OK : ErrorCode::DEVICE_NOT_RESPONDING;
+		return i2c_device->WriteRegisterU8(reg, value);
 	}
 
-	static ErrorCode WriteSingleReg(i2c_master_dev_handle_t dev_handle, uint8_t reg, uint8_t value)
+	ErrorCode M::SoftwareReset(i2c::iI2CBus* i2c_bus)
 	{
-		uint8_t txbuf[2] = {reg, value};
-		esp_err_t rc = i2c_master_transmit(dev_handle, txbuf, sizeof(txbuf), I2C_TIMEOUT_MS);
-		return rc == ESP_OK ? ErrorCode::OK : ErrorCode::DEVICE_NOT_RESPONDING;
-	}
-
-	ErrorCode M::SoftwareReset(i2c_master_bus_handle_t master_bus_handle)
-	{
-		if (master_bus_handle == nullptr)
+		if (i2c_bus == nullptr)
 		{
 			return ErrorCode::GENERIC_ERROR;
 		}
 
 		uint8_t data = SWRST;
-		i2c_master_dev_handle_t general_call_dev = nullptr;
-		i2c_device_config_t dev_cfg = {
-			.dev_addr_length = I2C_ADDR_BIT_LEN_7,
-			.device_address = 0x00,
-			.scl_speed_hz = I2C_SCL_SPEED_HZ,
-		};
-		esp_err_t rc = i2c_master_bus_add_device(master_bus_handle, &dev_cfg, &general_call_dev);
-		if (rc != ESP_OK)
+		i2c::iI2CDevice* general_call_dev = i2c_bus->GetGeneralCallDevice();
+		if (general_call_dev == nullptr)
 		{
-			ESP_LOGE(TAG, "Could not add general-call device, err=%d", rc);
+			ESP_LOGE(TAG, "General-call reset device could not be created");
 			return ErrorCode::DEVICE_NOT_RESPONDING;
 		}
-		rc = i2c_master_transmit(general_call_dev, &data, 1, I2C_TIMEOUT_MS);
-		return rc == ESP_OK ? ErrorCode::OK : ErrorCode::DEVICE_NOT_RESPONDING;
+
+		ErrorCode ret = general_call_dev->WriteRaw(&data, 1);
+		if (ret != ErrorCode::OK)
+		{
+			ESP_LOGE(TAG, "General-call SWRST was NACKed");
+			return ret;
+		}
+		return ErrorCode::OK;
 	}
 
 	ErrorCode M::Loop()
@@ -139,7 +122,7 @@ namespace PCA9685
 		}
 		size_t bytesToWrite = (lastOutput - firstOutput + 1) * 4;
 		//ESP_LOGI(TAG, "first=%d, last=%d, bytesToWrite=%i, buffer[0...5]=%04X %04X %04X %04X %04X %04X", firstOutput, lastOutput, bytesToWrite, buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5]);
-		if (this->dev_handle == nullptr)
+		if (this->i2c_device == nullptr)
 		{
 			return ErrorCode::NOT_YET_INITIALIZED;
 		}
@@ -150,20 +133,20 @@ namespace PCA9685
 			write_buf[2 * i] = (uint8_t)(buffer[i] & 0xFF);
 			write_buf[2 * i + 1] = (uint8_t)((buffer[i] >> 8) & 0xFF);
 		}
-		return WriteReg(this->dev_handle, (uint8_t)(0x06 + 4 * firstOutput), write_buf, bytesToWrite);
+		return WriteReg(this->i2c_device, (uint8_t)(0x06 + 4 * firstOutput), write_buf, bytesToWrite);
 	}
 
-	ErrorCode M::SetupStatic(i2c_master_bus_handle_t master_bus_handle, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq)
+	ErrorCode M::SetupStatic(i2c::iI2CBus* i2c_bus, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq)
 	{
-		i2c_master_dev_handle_t dev_handle = nullptr;
-		RETURN_ON_ERRORCODE(EnsureDeviceHandle(master_bus_handle, device, dev_handle));
-		RETURN_ON_ERRORCODE(SoftwareReset(master_bus_handle));
+		i2c::iI2CDevice* i2c_device = nullptr;
+		RETURN_ON_ERRORCODE(EnsureDevice(i2c_bus, device, i2c_device));
+		RETURN_ON_ERRORCODE(SoftwareReset(i2c_bus));
 		
 		//Sleep in to be able to program the frequency
-		RETURN_ON_ERRORCODE(WriteSingleReg(dev_handle, MODE1, 1 << MODE1_SLEEP));
+		RETURN_ON_ERRORCODE(WriteSingleReg(i2c_device, MODE1, 1 << MODE1_SLEEP));
 
 		// PRE_SCALE Register (possible in sleep mode only)
-		RETURN_ON_ERRORCODE(WriteSingleReg(dev_handle, PRE_SCALE, (uint8_t)(freq)));
+		RETURN_ON_ERRORCODE(WriteSingleReg(i2c_device, PRE_SCALE, (uint8_t)(freq)));
 
 		/* MODE1 Register:
 		 * Internal clock, not external
@@ -172,21 +155,21 @@ namespace PCA9685
 		 * Does not respond to subaddresses
 		 * Does not respond to All Call I2C-bus address
 		 */
-		RETURN_ON_ERRORCODE(WriteSingleReg(dev_handle, MODE1, (1 << MODE1_AI)));
+		RETURN_ON_ERRORCODE(WriteSingleReg(i2c_device, MODE1, (1 << MODE1_AI)));
 
 		/* MODE2 Register:
 		 * Outputs change on STOP command
 		 */
-		RETURN_ON_ERRORCODE(WriteSingleReg(dev_handle, MODE2, ((uint8_t)inv << MODE2_INVRT) | ((uint8_t)outdrv << MODE2_OUTDRV) | ((uint8_t)outne << MODE2_OUTNE0)));
+		RETURN_ON_ERRORCODE(WriteSingleReg(i2c_device, MODE2, ((uint8_t)inv << MODE2_INVRT) | ((uint8_t)outdrv << MODE2_OUTDRV) | ((uint8_t)outne << MODE2_OUTNE0)));
 
 		// Switch all off
-		return SetOutputs(master_bus_handle, device, 0x0001, 0);
+		return SetOutputs(i2c_bus, device, 0x0001, 0);
 	}
 
-	ErrorCode M::SetOutputs(i2c_master_bus_handle_t master_bus_handle, Device device, uint16_t mask, uint16_t val)
+	ErrorCode M::SetOutputs(i2c::iI2CBus* i2c_bus, Device device, uint16_t mask, uint16_t val)
 	{
-		i2c_master_dev_handle_t dev_handle = nullptr;
-		RETURN_ON_ERRORCODE(EnsureDeviceHandle(master_bus_handle, device, dev_handle));
+		i2c::iI2CDevice* i2c_device = nullptr;
+		RETURN_ON_ERRORCODE(EnsureDevice(i2c_bus, device, i2c_device));
 
 		uint8_t data[64];
 		// suche 1er Blöcke und übertrage die zusammen
@@ -229,7 +212,7 @@ namespace PCA9685
 				data[4 * j + 2] = (uint8_t)(offValue & 0xFF);
 				data[4 * j + 3] = (uint8_t)((offValue >> 8) & 0xFF);
 			}
-			RETURN_ON_ERRORCODE(WriteReg(dev_handle, LEDn_ON_L(firstOne), (uint8_t *)data, 4 * ones));
+			RETURN_ON_ERRORCODE(WriteReg(i2c_device, LEDn_ON_L(firstOne), (uint8_t *)data, 4 * ones));
 		}
 		return ErrorCode::OK;
 	}
@@ -240,17 +223,17 @@ namespace PCA9685
 	 * @retval	1: A PCA9685 has been initialized
 	 * @retval	0: Initialization failed
 	 */
-	ErrorCode M::Setup(i2c_master_bus_handle_t master_bus_handle)
+	ErrorCode M::Setup(i2c::iI2CBus* i2c_bus)
 	{
-		this->master_bus_handle = master_bus_handle;
-		this->dev_handle = nullptr;
-		RETURN_ON_ERRORCODE(EnsureDeviceHandle(this->master_bus_handle, this->device, this->dev_handle));
-		return SetupStatic(this->master_bus_handle, this->device, this->inv, this->outdrv, outne, freq);
+		this->i2c_bus = i2c_bus;
+		this->i2c_device = nullptr;
+		RETURN_ON_ERRORCODE(EnsureDevice(this->i2c_bus, this->device, this->i2c_device));
+		return SetupStatic(this->i2c_bus, this->device, this->inv, this->outdrv, outne, freq);
 	}
 
 	ErrorCode M::SetOutputFull(Output Output, bool on)
 	{
-		if (this->dev_handle == nullptr)
+		if (this->i2c_device == nullptr)
 		{
 			ESP_LOGE(TAG, "i2c device is null");
 			return ErrorCode::NOT_YET_INITIALIZED;
@@ -258,7 +241,7 @@ namespace PCA9685
 		uint8_t data = 0xF0;
 		// 07,4 on, 09,4 full off
 		const uint8_t reg = (uint8_t)(0x06 + 4 * (uint8_t)Output + (on ? 1 : 3));
-		return WriteReg(this->dev_handle, reg, &data, 1);
+		return WriteReg(this->i2c_device, reg, &data, 1);
 	}
 
 	/**
@@ -271,14 +254,14 @@ namespace PCA9685
 	 */
 	ErrorCode M::SetOutput(Output Output, uint16_t OnValue, uint16_t OffValue)
 	{
-		if (this->dev_handle == nullptr)
+		if (this->i2c_device == nullptr)
 		{
 			//ESP_LOGE(TAG, "i2c device is null");
 			return ErrorCode::NOT_YET_INITIALIZED;
 		}
 		// Optional: PCA9685_I2C_SlaveAtAddress(Address), might make things slower
 		uint8_t data[4] = {(uint8_t)(OnValue & 0xFF), (uint8_t)((OnValue >> 8) & 0x1F), (uint8_t)(OffValue & 0xFF), (uint8_t)((OffValue >> 8) & 0x1F)};
-		return WriteReg(this->dev_handle, LEDn_ON_L((uint8_t)Output), data, 4);
+		return WriteReg(this->i2c_device, LEDn_ON_L((uint8_t)Output), data, 4);
 	}
 
 	/**
@@ -290,7 +273,7 @@ namespace PCA9685
 	 */
 	ErrorCode M::SetDutyCycleForOutput(Output Output, uint16_t val)
 	{
-		if (this->dev_handle == nullptr)
+			if (this->i2c_device == nullptr)
 		{
 			//ESP_LOGE(TAG, "i2c device is null");
 			return ErrorCode::NOT_YET_INITIALIZED;
@@ -315,14 +298,14 @@ namespace PCA9685
 		return SetOutput(Output, onValue, offValue);
 	}
 
-	ErrorCode M::SetAllOutputs(i2c_master_bus_handle_t master_bus_handle, Device device, uint16_t dutyCycle)
+	ErrorCode M::SetAllOutputs(i2c::iI2CBus* i2c_bus, Device device, uint16_t dutyCycle)
 	{
-		return SetOutputs(master_bus_handle, device, 0xFFFF, dutyCycle);
+		return SetOutputs(i2c_bus, device, 0xFFFF, dutyCycle);
 	}
 
 	ErrorCode M::SetAll(uint16_t OnValue, uint16_t OffValue)
 	{
-		if (this->dev_handle == nullptr)
+		if (this->i2c_device == nullptr)
 		{
 			return ErrorCode::NOT_YET_INITIALIZED;
 		}
@@ -332,10 +315,10 @@ namespace PCA9685
 			(uint8_t)(OffValue & 0xFF),
 			(uint8_t)((OffValue >> 8) & 0x1F),
 		};
-		return WriteReg(this->dev_handle, ALL_LED_ON_L, data, 4);
+		return WriteReg(this->i2c_device, ALL_LED_ON_L, data, 4);
 	}
 
-	M::M(Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq) : master_bus_handle(nullptr), dev_handle(nullptr), device(device), inv(inv), outdrv(outdrv), outne(outne), freq(freq)
+	M::M(Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq) : i2c_bus(nullptr), i2c_device(nullptr), device(device), inv(inv), outdrv(outdrv), outne(outne), freq(freq)
 	{
 		for (int i = 0; i < 16; i++)
 		{

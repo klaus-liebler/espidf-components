@@ -39,13 +39,15 @@ class iI2CBus_Impl : public iI2CBus {
 private:
     i2c_master_bus_handle_t bus_handle = nullptr;
     uint32_t device_speed_hz = static_cast<uint32_t>(I2CSpeed::SPEED_100K);
+    iI2CDevice* general_call_device = nullptr;
 
 public:
     iI2CBus_Impl() = default;
 
-    ErrorCode Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda, int intr_alloc_flags = 0);
+    ErrorCode Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda);
     ErrorCode SetDefaultSpeed(I2CSpeed speed);
     ErrorCode CreateDevice(const uint8_t address7bit, iI2CDevice **device) override;
+    iI2CDevice* GetGeneralCallDevice() override;
     ErrorCode ProbeAddress(const uint8_t address7bit) override;
     ErrorCode Scan(FILE *fp) override;
 };

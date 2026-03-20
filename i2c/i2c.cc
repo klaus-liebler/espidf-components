@@ -3,6 +3,8 @@
 #include <array>
 #include <vector>
 
+#include "esp_log.h"
+
 namespace i2c {
 
 constexpr std::array<const char *, 128> address2name{
@@ -241,21 +243,30 @@ ErrorCode iI2CDevice_Impl::Probe() {
     return ToErrorCode(i2c_master_probe(bus_handle, address7bit, 50));
 }
 
-ErrorCode iI2CBus_Impl::Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda, int intr_alloc_flags) {
+ErrorCode iI2CBus_Impl::Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda) {
     i2c_master_bus_config_t bus_config = {
         .i2c_port = static_cast<i2c_port_num_t>(port),
         .sda_io_num = sda,
         .scl_io_num = scl,
         .clk_source = I2C_CLK_SRC_DEFAULT,
         .glitch_ignore_cnt = 7,
-        .intr_priority = intr_alloc_flags,
+        .intr_priority = 0,
         .trans_queue_depth = 0,
         .flags = {
             .enable_internal_pullup = true,
+            .allow_pd=false,
         },
     };
 
-    return i2c_new_master_bus(&bus_config, &bus_handle) == ESP_OK ? ErrorCode::OK : ErrorCode::GENERIC_ERROR;
+    if (i2c_new_master_bus(&bus_config, &bus_handle) != ESP_OK) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+
+    general_call_device = nullptr;
+    if (CreateDevice(0x00, &general_call_device) != ErrorCode::OK) {
+        return ErrorCode::FUNCTION_NOT_AVAILABLE;
+    }
+    return ErrorCode::OK;
 }
 
 ErrorCode iI2CBus_Impl::SetDefaultSpeed(I2CSpeed speed) {
@@ -272,6 +283,10 @@ ErrorCode iI2CBus_Impl::CreateDevice(const uint8_t address7bit, iI2CDevice **dev
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = address7bit,
         .scl_speed_hz = device_speed_hz,
+        .scl_wait_us=0,
+        .flags = {
+            .disable_ack_check = false,
+        },
     };
 
     i2c_master_dev_handle_t dev = nullptr;
@@ -281,6 +296,10 @@ ErrorCode iI2CBus_Impl::CreateDevice(const uint8_t address7bit, iI2CDevice **dev
 
     *device = new iI2CDevice_Impl(bus_handle, dev, address7bit);
     return ErrorCode::OK;
+}
+
+iI2CDevice* iI2CBus_Impl::GetGeneralCallDevice() {
+    return general_call_device;
 }
 
 ErrorCode iI2CBus_Impl::ProbeAddress(const uint8_t address7bit) {
@@ -294,21 +313,18 @@ ErrorCode iI2CBus_Impl::Scan(FILE *fp) {
     if (bus_handle == nullptr) {
         return ErrorCode::GENERIC_ERROR;
     }
-
+    if(fp == nullptr) {
+        return ErrorCode::OK; // Just return the count without printing if fp is nullptr.
+    }
+    std::fprintf(fp, "Scanning I2C bus...\n");
     int cnt = 0;
     for (uint8_t addr = 1; addr < 128; ++addr) {
         if (i2c_master_probe(bus_handle, addr, 50) == ESP_OK) {
-            if (fp != nullptr) {
-                std::fprintf(fp, "Found %s at 0x%02X\n", address2name[addr], addr);
-            }
+            std::fprintf(fp, "  0x%02X: %s\n", addr, address2name[addr]);
             ++cnt;
         }
     }
-
-    if (fp != nullptr) {
-        std::fprintf(fp, "%d devices found\n", cnt);
-    }
-
+    std::fprintf(fp, "Finished scanning I2C bus. %d devices found\n", cnt);
     return ErrorCode::OK;
 }
 
