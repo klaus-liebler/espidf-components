@@ -264,6 +264,14 @@ namespace PCA9685
 		return WriteReg(this->i2c_device, LEDn_ON_L((uint8_t)Output), data, 4);
 	}
 
+	ErrorCode M::SetOutput(uint16_t output, uint16_t value, bool loopWriteImmediately){
+		val[output & 0x0F] = value;
+		if(!loopWriteImmediately){
+			return ErrorCode::OK;
+		}
+		return Loop();
+    }
+
 	/**
 	 * @brief	Sets a specific output for a PCA9685 based on an approximate duty cycle
 	 * @param	Address: The address to the PCA9685

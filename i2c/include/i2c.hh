@@ -49,7 +49,7 @@ public:
     ErrorCode CreateDevice(const uint8_t address7bit, iI2CDevice **device) override;
     iI2CDevice* GetGeneralCallDevice() override;
     ErrorCode ProbeAddress(const uint8_t address7bit) override;
-    ErrorCode Scan(FILE *fp) override;
+    ErrorCode Scan(FILE *fp, const char* busname) override;
 };
 
 } // namespace i2c

@@ -3,10 +3,7 @@
 #include <string.h>
 #include <sys/cdefs.h>
 #include <esp_compiler.h>
-#include <limits.h>
-
-
-
+#include <climits>
 
 esp_err_t cRotaryEncoder::Start()
 {
@@ -20,9 +17,6 @@ esp_err_t cRotaryEncoder::Stop()
     return pcnt_unit_stop(this->pcnt_unit);
 }
 
-/**
- * Counter is in 4X mode. One complete cycle results in +-4 steps
-*/
 esp_err_t cRotaryEncoder::GetValue(int16_t &value, bool &isPressed, bool resetValueToZero)
 {
     if(sw_gpio_num != GPIO_NUM_NC){
@@ -35,46 +29,69 @@ esp_err_t cRotaryEncoder::GetValue(int16_t &value, bool &isPressed, bool resetVa
     return ESP_OK;
 }
 
-
-cRotaryEncoder::cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, gpio_num_t sw_gpio_num, int16_t minCount, int16_t maxCount)
-	:pcnt_unit(nullptr), phase_a_gpio_num(phase_a_gpio_num), phase_b_gpio_num(phase_b_gpio_num), sw_gpio_num(sw_gpio_num), minCount(minCount), maxCount(maxCount){
+//high und low sind int16_t, da der PCNT Counter 16-bit breit ist.
+cRotaryEncoder::cRotaryEncoder(gpio_num_t phase_a_gpio_num, gpio_num_t phase_b_gpio_num, gpio_num_t sw_gpio_num, int16_t lowLimit, int16_t highLimit)
+	:pcnt_unit(nullptr), phase_a_gpio_num(phase_a_gpio_num), phase_b_gpio_num(phase_b_gpio_num), sw_gpio_num(sw_gpio_num), lowLimit(lowLimit), highLimit(highLimit){
 
 }
 
-esp_err_t cRotaryEncoder::Init()
+esp_err_t cRotaryEncoder::Init(StepMode stepMode)
 {
 	gpio_reset_pin(phase_a_gpio_num);
 	gpio_reset_pin(phase_b_gpio_num);
+    if(sw_gpio_num != GPIO_NUM_NC){
+        gpio_reset_pin(sw_gpio_num);
+    }
     
 	gpio_set_direction(phase_a_gpio_num, GPIO_MODE_INPUT);
 	gpio_set_direction(phase_b_gpio_num, GPIO_MODE_INPUT);
     
 	gpio_pullup_en(phase_a_gpio_num);
 	gpio_pullup_en(phase_b_gpio_num);
+    
     if(sw_gpio_num != GPIO_NUM_NC){
         gpio_set_direction(sw_gpio_num, GPIO_MODE_INPUT);
-        gpio_reset_pin(sw_gpio_num);
         gpio_pullup_en(sw_gpio_num);
     }
 
-    pcnt_unit_config_t unit_config{minCount, maxCount,0, {0}};
+    //Ich erlaube nicht die Softwareseitige Erweitereung der Grenzen
+    //Die GetValue-Methode muss oft genug aufgerufen und ggf zurückgesetzt werden, damit es nicht zu einem Überlauf kommt.
+    pcnt_unit_config_t unit_config{PCNT_CLK_SRC_DEFAULT, (int)lowLimit, (int)highLimit,0,0};
     ESP_ERROR_CHECK(pcnt_new_unit(&unit_config, &pcnt_unit));
 
     pcnt_glitch_filter_config_t filter_config {1000};
     ESP_ERROR_CHECK(pcnt_unit_set_glitch_filter(pcnt_unit, &filter_config));
 
-    pcnt_chan_config_t chan_a_config{phase_a_gpio_num, phase_b_gpio_num, 0,0,0,0,0};
-    pcnt_chan_config_t chan_b_config{phase_b_gpio_num, phase_a_gpio_num, 0,0,0,0,0};
+    pcnt_chan_config_t chan_a_config{phase_a_gpio_num, phase_b_gpio_num, 0,0,0,0};
+    pcnt_chan_config_t chan_b_config{phase_b_gpio_num, phase_a_gpio_num, 0,0,0,0};
     
     pcnt_channel_handle_t pcnt_chan_a{nullptr};
     pcnt_channel_handle_t pcnt_chan_b{nullptr};
     ESP_ERROR_CHECK(pcnt_new_channel(pcnt_unit, &chan_a_config, &pcnt_chan_a));
     ESP_ERROR_CHECK(pcnt_new_channel(pcnt_unit, &chan_b_config, &pcnt_chan_b));
 
-    ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan_a, PCNT_CHANNEL_EDGE_ACTION_DECREASE, PCNT_CHANNEL_EDGE_ACTION_INCREASE));
-    ESP_ERROR_CHECK(pcnt_channel_set_level_action(pcnt_chan_a, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE));
-    ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan_b, PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_DECREASE));
-    ESP_ERROR_CHECK(pcnt_channel_set_level_action(pcnt_chan_b, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE));
+    // Use PCNT hardware to define the effective step resolution.
+    switch (stepMode) {
+        case StepMode::Step4:
+            ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan_a, PCNT_CHANNEL_EDGE_ACTION_DECREASE, PCNT_CHANNEL_EDGE_ACTION_INCREASE));
+            ESP_ERROR_CHECK(pcnt_channel_set_level_action(pcnt_chan_a, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE));
+            ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan_b, PCNT_CHANNEL_EDGE_ACTION_INCREASE, PCNT_CHANNEL_EDGE_ACTION_DECREASE));
+            ESP_ERROR_CHECK(pcnt_channel_set_level_action(pcnt_chan_b, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE));
+            break;
+        case StepMode::Step2:
+            ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan_a, PCNT_CHANNEL_EDGE_ACTION_DECREASE, PCNT_CHANNEL_EDGE_ACTION_INCREASE));
+            ESP_ERROR_CHECK(pcnt_channel_set_level_action(pcnt_chan_a, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE));
+            ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan_b, PCNT_CHANNEL_EDGE_ACTION_HOLD, PCNT_CHANNEL_EDGE_ACTION_HOLD));
+            ESP_ERROR_CHECK(pcnt_channel_set_level_action(pcnt_chan_b, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_KEEP));
+            break;
+        case StepMode::Step1:
+        default:
+            ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan_a, PCNT_CHANNEL_EDGE_ACTION_HOLD, PCNT_CHANNEL_EDGE_ACTION_INCREASE));
+            ESP_ERROR_CHECK(pcnt_channel_set_level_action(pcnt_chan_a, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_INVERSE));
+            ESP_ERROR_CHECK(pcnt_channel_set_edge_action(pcnt_chan_b, PCNT_CHANNEL_EDGE_ACTION_HOLD, PCNT_CHANNEL_EDGE_ACTION_HOLD));
+            ESP_ERROR_CHECK(pcnt_channel_set_level_action(pcnt_chan_b, PCNT_CHANNEL_LEVEL_ACTION_KEEP, PCNT_CHANNEL_LEVEL_ACTION_KEEP));
+            break;
+    }
 
 
     ESP_ERROR_CHECK(pcnt_unit_enable(pcnt_unit));

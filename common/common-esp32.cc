@@ -1,6 +1,5 @@
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include <driver/gpio.h>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include <nvs_flash.h>
 #include <esp_check.h>
 #include <esp_timer.h>
@@ -24,15 +23,25 @@ void delayMs(int64_t ms)
     vTaskDelay(pdMS_TO_TICKS(ms));
 }
 
-esp_err_t nvs_flash_init_and_erase_lazily(const char *partition_label)
+esp_err_t nvs_flash_init_and_erase_lazily(const char *partition_label, nvs_stats_t *outInfo)
 {
+
     esp_err_t ret = nvs_flash_init_partition(partition_label);
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
         ESP_ERROR_CHECK(nvs_flash_erase_partition(partition_label));
         ret=nvs_flash_init_partition(partition_label);
     }
-    return ret;
+    if(ret!=ESP_OK){
+        return ret;
+    }
+
+    if (outInfo != nullptr)
+    {
+        return nvs_get_stats(partition_label, outInfo);
+    }
+    
+    return ESP_OK;
 }
 
 esp_err_t ConfigGpioInput(gpio_num_t gpio, gpio_pull_mode_t pullMode)

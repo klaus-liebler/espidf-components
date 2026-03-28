@@ -1,6 +1,5 @@
 #pragma once
-#include <stdint.h>
-#include <driver/i2c.h>
+#include <cstdint>
 #include <i2c_sensor.hh>
 
 namespace CCS811

@@ -309,14 +309,14 @@ ErrorCode iI2CBus_Impl::ProbeAddress(const uint8_t address7bit) {
     return i2c_master_probe(bus_handle, address7bit, 50) == ESP_OK ? ErrorCode::OK : ErrorCode::DEVICE_NOT_RESPONDING;
 }
 
-ErrorCode iI2CBus_Impl::Scan(FILE *fp) {
+ErrorCode iI2CBus_Impl::Scan(FILE *fp, const char* busname) {
     if (bus_handle == nullptr) {
         return ErrorCode::GENERIC_ERROR;
     }
     if(fp == nullptr) {
         return ErrorCode::OK; // Just return the count without printing if fp is nullptr.
     }
-    std::fprintf(fp, "Scanning I2C bus...\n");
+    std::fprintf(fp, "Scanning %s...\n", busname);
     int cnt = 0;
     for (uint8_t addr = 1; addr < 128; ++addr) {
         if (i2c_master_probe(bus_handle, addr, 50) == ESP_OK) {
@@ -324,7 +324,7 @@ ErrorCode iI2CBus_Impl::Scan(FILE *fp) {
             ++cnt;
         }
     }
-    std::fprintf(fp, "Finished scanning I2C bus. %d devices found\n", cnt);
+    std::fprintf(fp, "Finished scanning %s. %d devices found\n", busname, cnt);
     return ErrorCode::OK;
 }
 

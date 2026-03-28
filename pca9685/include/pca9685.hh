@@ -165,13 +165,7 @@ namespace PCA9685
 	  ErrorCode SetOutputFull(Output Output, bool on);
 	  ErrorCode SetAll(uint16_t OnValue, uint16_t OffValue);
 	  ErrorCode SetDutyCycleForOutput(Output Output, uint16_t val);
-    ErrorCode SetOutput(uint16_t output, uint16_t value, bool loopWriteImmediately=false){
-			val[output & 0x0F] = value;
-      if(!loopWriteImmediately){
-        return ErrorCode::OK;
-      }
-      return Loop();
-    }
+    ErrorCode SetOutput(uint16_t output, uint16_t value, bool loopWriteImmediately=false);
     ErrorCode Loop();
     uint8_t GetDeviceAddress(){
       return (uint8_t)this->device;

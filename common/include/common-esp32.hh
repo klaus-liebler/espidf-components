@@ -3,6 +3,7 @@
 #include "freertos/task.h"
 #include <driver/gpio.h>
 #include <esp_check.h>
+#include <nvs.h>
 #include "common.hh"
 
 #define FLASH_FILE(x)                                             \
@@ -112,7 +113,9 @@ constexpr uint64_t IO(int n)
         }                                                                                                             \
     } while (0)
 
-esp_err_t nvs_flash_init_and_erase_lazily(const char *partition_label);
+
+
+esp_err_t nvs_flash_init_and_erase_lazily(const char *partition_label, nvs_stats_t *stats=nullptr);
 constexpr int64_t ms2ticks(int64_t ms);
 void delayAtLeastMs(int64_t ms);
 void delayMs(int64_t ms);

@@ -1,4 +1,4 @@
 idf_component_register(SRCS "ccs811.cc"
                        INCLUDE_DIRS "include"
-                       REQUIRES i2c_sensor)
+                       REQUIRES i2c_sensor esp_driver_gpio)
 

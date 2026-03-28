@@ -107,7 +107,10 @@ namespace AdcButtons
         adc_continuous_config_t dig_cfg = {};
         dig_cfg.sample_freq_hz = SAMPLE_FREQUENCY;
         dig_cfg.conv_mode = ADC_CONV_SINGLE_UNIT_1;
+    #pragma GCC diagnostic push
+    #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         dig_cfg.format = ADC_DIGI_OUTPUT_FORMAT_TYPE2;
+    #pragma GCC diagnostic pop
         
         adc_digi_pattern_config_t adc_pattern[SOC_ADC_PATT_LEN_MAX];
         adc_pattern[0].atten = ADC_ATTEN_DB_12;

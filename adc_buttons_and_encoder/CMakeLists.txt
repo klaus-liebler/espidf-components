@@ -1,5 +1,5 @@
 idf_component_register(
 	SRCS
         INCLUDE_DIRS "include"
-	REQUIRES "driver" "esp_adc"
+	REQUIRES "esp_driver_gpio" "esp_adc"
 )

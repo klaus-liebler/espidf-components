@@ -51,7 +51,7 @@ class iI2CBus{
     // Returns a cached device for general-call address 0x00, or nullptr if unsupported.
     virtual iI2CDevice* GetGeneralCallDevice()=0;
     virtual ErrorCode ProbeAddress(const uint8_t address7bit)=0;
-    virtual ErrorCode Scan(FILE* fp)=0;
+    virtual ErrorCode Scan(FILE *fp=stdout, const char* busname="I2C Bus")=0;
 };
 
 } // namespace i2c

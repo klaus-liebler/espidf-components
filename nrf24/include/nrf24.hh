@@ -1,12 +1,11 @@
 #pragma once
 
 #include <string.h>
-
+#include <driver/spi_master.h>
+#include <driver/gpio.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-#include <driver/spi_master.h>
-#include <driver/gpio.h>
 
 #include "errorcodes.hh"
  

@@ -1,7 +1,10 @@
 #include <cinttypes>
 #include <cstring>
+#include <freertos/FreeRTOS.h>
+#include <freertos/task.h>
 #include "ccs811.hh"
 #include <esp_log.h>
+#include <driver/gpio.h>
 #define TAG "CCS811"
 
 namespace CCS811
