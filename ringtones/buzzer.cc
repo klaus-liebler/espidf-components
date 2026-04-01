@@ -41,7 +41,6 @@ namespace BUZZER
         buzzer_channel.gpio_num = pin;
         buzzer_channel.speed_mode = LEDC_LOW_SPEED_MODE;
         buzzer_channel.channel = channel;
-        buzzer_channel.intr_type = LEDC_INTR_DISABLE;
         buzzer_channel.timer_sel = timer_num;
         buzzer_channel.duty = 0;
         buzzer_channel.hpoint = 0;
