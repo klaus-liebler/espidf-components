@@ -7,6 +7,7 @@
 #include <driver/spi_master.h>
 #include <driver/gpio.h>
 #include <esp_timer.h>
+#include <esp_heap_caps.h>
 #include "crgb.hh"
 #include <array>
 #define TAG "RGBLED"
@@ -26,6 +27,53 @@ namespace RGBLED
     public:
         virtual void Reset(tms_t now) = 0;
         virtual CRGB Animate(tms_t now) = 0;
+    };
+
+    class MultipleFlashesPattern : public AnimationPattern{
+    private:
+        CRGB colorFlash;
+        size_t flashCount;
+        CRGB colorIdle;
+        size_t idleDuration;
+        tms_t lastChange{0};
+        size_t flashDuration{150};
+        size_t currenFlash{0};
+    public:
+        void Reset(tms_t now) override
+        {
+            lastChange = now;
+            currenFlash = 0;
+        }
+        CRGB Animate(tms_t now) override
+        {
+            if (flashCount == 0)
+            {
+                return colorIdle;
+            }
+
+            const tms_t pulseWindow = static_cast<tms_t>(flashCount * 2 * flashDuration);
+            const tms_t cycleDuration = pulseWindow + static_cast<tms_t>(idleDuration);
+            if (cycleDuration == 0)
+            {
+                return colorIdle;
+            }
+
+            tms_t elapsed = now - lastChange;
+            if (elapsed >= cycleDuration)
+            {
+                elapsed %= cycleDuration;
+                lastChange = now - elapsed;
+            }
+
+            if (elapsed >= pulseWindow)
+            {
+                return colorIdle;
+            }
+
+            const tms_t slot = elapsed / static_cast<tms_t>(flashDuration);
+            return (slot % 2 == 0) ? colorFlash : colorIdle;
+        }
+        MultipleFlashesPattern(CRGB colorFlash, size_t flashCount, CRGB colorIdle=CRGB::Black, size_t idleDuration=1000) : colorFlash(colorFlash), flashCount(flashCount), colorIdle(colorIdle), idleDuration(idleDuration) {}
     };
 
     class BlinkPattern : public AnimationPattern
