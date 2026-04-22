@@ -4,6 +4,7 @@
 #include <errorcodes.hh>
 #include <common.hh>
 #include <esp_log.h>
+#include <esp_heap_caps.h>
 #include <driver/spi_master.h>
 #include <driver/gpio.h>
 #include <esp_timer.h>
