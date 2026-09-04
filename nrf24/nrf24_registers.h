@@ -42,7 +42,23 @@ namespace REG {
     /* P model memory Map */
     constexpr uint8_t RPD                  = 0x09;
     constexpr uint8_t W_TX_PAYLOAD_NO_ACK  = 0xB0;
+
+    /* Dynamic-Payload-Kommando (nRF24L01+, fuer Voll-Duplex-Protokolle wie Hoymiles benoetigt) */
+    constexpr uint8_t R_RX_PL_WID   = 0x60;
 }
+
+/* FEATURE-Register-Bits (0x1D) */
+#define EN_DPL      2
+#define EN_ACK_PAY  1
+#define EN_DYN_ACK  0
+
+/* DYNPD-Register-Bits (0x1C) -- ein Bit pro RX-Pipe */
+#define DPL_P0      0
+#define DPL_P1      1
+#define DPL_P2      2
+#define DPL_P3      3
+#define DPL_P4      4
+#define DPL_P5      5
 
 
 

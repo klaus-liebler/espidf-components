@@ -1,6 +1,7 @@
 #include <nrf24.hh>
 #include "nrf24_registers.h"
 #include <esp_log.h>
+#include <esp_rom_sys.h>
 #define TAG "Nrf24RECV"
 
 constexpr char rf24_datarates[][9] = {"1Mbps","2Mbps", "250kbps", "Reserved"};
@@ -266,5 +267,121 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 		uint8_t level = readRegister(REG::RF_SETUP);
 		level = (level & (_BV(RF_PWR_LOW) | _BV(RF_PWR_HIGH))) >> 1;
 		return (Rf24PowerAmp)(level);
+	}
+
+	// -------------------------------------------------------------------
+	// Ab hier: additive Erweiterungen fuer Voll-Duplex-Protokolle (Hoymiles).
+	// Aendert keine der obigen Methoden, die vom reinen RX-Pfad (Milight,
+	// SNSCT_NODE_TERRASSE) genutzt werden.
+	// -------------------------------------------------------------------
+
+	void Nrf24Receiver::OpenWritingPipe(const uint8_t *addr)
+	{
+		memcpy(buf16 + 1, addr, 5);
+		writeRegistersStartingWith1inBuf(REG::TX_ADDR, 5);
+		memcpy(buf16 + 1, addr, 5);
+		writeRegistersStartingWith1inBuf(REG::RX_ADDR_P0, 5);
+	}
+
+	void Nrf24Receiver::OpenReadingPipe(const uint8_t *addr)
+	{
+		memcpy(buf16 + 1, addr, 5);
+		writeRegistersStartingWith1inBuf(REG::RX_ADDR_P1, 5);
+	}
+
+	void Nrf24Receiver::SetChannel(uint8_t channel)
+	{
+		configRegister(REG::RF_CH, channel);
+	}
+
+	void Nrf24Receiver::SetRetries(uint8_t delay, uint8_t count)
+	{
+		configRegister(REG::SETUP_RETR, ((delay & 0x0F) << ARD) | ((count & 0x0F) << ARC));
+	}
+
+	void Nrf24Receiver::SetDataRateAndPaLevel(Rf24Datarate speed, Rf24PowerAmp txPower)
+	{
+		uint8_t value;
+		if ((int)speed > 1)
+		{
+			value = (1 << RF_DR_LOW);
+		}
+		else
+		{
+			value = (((int)speed) << RF_DR_HIGH);
+		}
+		value |= ((int)txPower) << RF_PWR;
+		configRegister(REG::RF_SETUP, value);
+	}
+
+	void Nrf24Receiver::SetAutoAck(uint8_t pipeMask)
+	{
+		configRegister(REG::EN_AA, pipeMask);
+	}
+
+	void Nrf24Receiver::EnableDynamicPayload(uint8_t pipeMask)
+	{
+		configRegister(REG::DYNPD, pipeMask);
+		configRegister(REG::FEATURE, (1 << EN_DPL));
+	}
+
+	uint8_t Nrf24Receiver::GetDynamicPayloadLength()
+	{
+		buf16[0] = REG::R_RX_PL_WID;
+		spiTransaction(buf16, 2);
+		return buf16[1];
+	}
+
+	void Nrf24Receiver::ReadRxPayload(uint8_t *data, uint8_t len)
+	{
+		data[0] = REG::R_RX_PAYLOAD;
+		spiTransaction(data, len + 1);
+		configRegister(REG::STATUS, (1 << RX_DR));
+	}
+
+	void Nrf24Receiver::FlushTx()
+	{
+		singleByteCommand(REG::FLUSH_TX);
+	}
+
+	ErrorCode Nrf24Receiver::Transmit(const uint8_t *data, uint8_t len)
+	{
+		if (len > 32)
+			return ErrorCode::PAYLOAD_TOO_LARGE;
+
+		ceLow();
+		// In TX-Modus wechseln (PRIM_RX loeschen), Power/CRC-Konfiguration aus defaultConfigRegisterValue bleibt erhalten.
+		configRegister(REG::CONFIG, defaultConfigRegisterValue | (1 << PWR_UP));
+		FlushTx();
+
+		uint8_t txbuf[33] __attribute__((aligned(4)));
+		txbuf[0] = REG::W_TX_PAYLOAD;
+		memcpy(txbuf + 1, data, len);
+		spiTransaction(txbuf, len + 1);
+
+		ceHi();
+		esp_rom_delay_us(15);
+		ceLow();
+
+		// Auf TX_DS (erfolgreich uebertragen/bestaetigt) oder MAX_RT (Hardware-Retries verbraucht) warten.
+		ErrorCode result = ErrorCode::TIMEOUT;
+		for (int i = 0; i < 500; i++) // ~500 * 100us = 50ms Timeout
+		{
+			uint8_t status = GetStatus();
+			if (status & (1 << TX_DS))
+			{
+				result = ErrorCode::OK;
+				break;
+			}
+			if (status & (1 << MAX_RT))
+			{
+				result = ErrorCode::DEVICE_NOT_RESPONDING;
+				break;
+			}
+			esp_rom_delay_us(100);
+		}
+		configRegister(REG::STATUS, (1 << TX_DS) | (1 << MAX_RT));
+		FlushTx();
+		return result;
 	}
 

@@ -71,6 +71,48 @@ public:
 
 	ErrorCode Config(uint8_t channel, uint8_t payloadLen, const uint8_t *const readAddr, uint8_t readAddrLen, uint8_t en_aa, Rf24Datarate speed, Rf24PowerAmp txPower);
 
+	// -----------------------------------------------------------------------
+	// Ab hier: rein additive Erweiterungen fuer Voll-Duplex-Protokolle (z.B.
+	// Hoymiles/nRF24-Funkprotokoll). Der bestehende Empfangs-Workflow oben
+	// (Config()+IsIrqAsserted()/IsDataReady()/GetRxData(), genutzt von
+	// SNSCT_NODE_TERRASSE/Milight) bleibt davon unberuehrt.
+	// -----------------------------------------------------------------------
+
+	// Schreibt TX_ADDR und RX_ADDR_P0 (Pipe0 muss fuer Auto-Ack-Empfang auf
+	// die TX-Adresse gesetzt sein). addr zeigt auf 5 Byte.
+	void OpenWritingPipe(const uint8_t *addr);
+
+	// Schreibt RX_ADDR_P1 (5 Byte).
+	void OpenReadingPipe(const uint8_t *addr);
+
+	void SetChannel(uint8_t channel);
+
+	// delay in Vielfachen von 250us (0..15), count = Anzahl Hardware-Retries (0..15)
+	void SetRetries(uint8_t delay, uint8_t count);
+
+	void SetDataRateAndPaLevel(Rf24Datarate speed, Rf24PowerAmp txPower);
+
+	// pipeMask: Bit0=Pipe0 ... Bit5=Pipe5
+	void SetAutoAck(uint8_t pipeMask);
+
+	void EnableDynamicPayload(uint8_t pipeMask);
+
+	// Liefert die Laenge des naechsten Pakets im RX-FIFO (nur bei aktiviertem Dynamic Payload gueltig).
+	uint8_t GetDynamicPayloadLength();
+
+	// Wie GetRxData(), aber mit explizit uebergebener Laenge statt des Members payloadLen
+	// (fuer Dynamic Payload zwingend -- die tatsaechliche Laenge variiert pro Paket und muss
+	// vorher per GetDynamicPayloadLength() ermittelt werden). data muss mind. len+1 Byte gross sein.
+	void ReadRxPayload(uint8_t *data, uint8_t len);
+
+	void FlushTx();
+
+	// Sendet synchron ueber die aktuell mit OpenWritingPipe() gesetzte Adresse.
+	// Erwartet, dass der Aufrufer zuvor SetRetries()/SetChannel() passend gesetzt hat.
+	// Laesst den Chip anschliessend im Standby (weder RX noch TX) -- PowerUpRx() ruft
+	// der Aufrufer bei Bedarf selbst wieder auf, um in Empfangsmodus zurueckzukehren.
+	ErrorCode Transmit(const uint8_t *data, uint8_t len);
+
 	bool IsIrqAsserted();
 	bool IsDataReady();
 
