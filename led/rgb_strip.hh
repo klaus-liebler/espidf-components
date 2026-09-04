@@ -1,21 +1,22 @@
 #pragma once
-#include <stdio.h>
-#include <string.h>
-#include <errorcodes.hh>
 #include <common.hh>
+#include <errorcodes.hh>
 #include <esp_log.h>
 #include <esp_heap_caps.h>
 #include <driver/spi_master.h>
 #include <driver/gpio.h>
 #include <esp_timer.h>
-#include <esp_heap_caps.h>
-#include "crgb.hh"
+#include "animatable_led.hh"
+#include "auto_off.hh"
 #include <array>
-#define TAG "RGBLED"
-namespace RGBLED
+#define TAG "LED"
+
+// Nachfolger von RGBLED::M (rgbled-Komponente). Steuert einen SPI-DMA-angesteuerten LED-Streifen
+// mit LEDSIZE Pixeln an. Gegenueber dem Vorgaenger neu: ein AutoOffDeadline pro Pixel (vorher gar
+// nicht vorhanden) plus dieselbe "gleiches Pattern -> Deadline nicht anfassen"-Idiom wie SingleLed
+// (vorher fehlte auch das -- jeder AnimatePixel-Aufruf hat bedingungslos neu resettet).
+namespace led
 {
-   
-    
     enum class DeviceType
     {
         WS2812,
@@ -23,121 +24,28 @@ namespace RGBLED
         SK6805,
     };
 
-    class AnimationPattern
-    {
-    public:
-        virtual void Reset(tms_t now) = 0;
-        virtual CRGB Animate(tms_t now) = 0;
-    };
-
-    class MultipleFlashesPattern : public AnimationPattern{
-    private:
-        CRGB colorFlash;
-        size_t flashCount;
-        CRGB colorIdle;
-        size_t idleDuration;
-        tms_t lastChange{0};
-        size_t flashDuration{150};
-        size_t currenFlash{0};
-    public:
-        void Reset(tms_t now) override
-        {
-            lastChange = now;
-            currenFlash = 0;
-        }
-        CRGB Animate(tms_t now) override
-        {
-            if (flashCount == 0)
-            {
-                return colorIdle;
-            }
-
-            const tms_t pulseWindow = static_cast<tms_t>(flashCount * 2 * flashDuration);
-            const tms_t cycleDuration = pulseWindow + static_cast<tms_t>(idleDuration);
-            if (cycleDuration == 0)
-            {
-                return colorIdle;
-            }
-
-            tms_t elapsed = now - lastChange;
-            if (elapsed >= cycleDuration)
-            {
-                elapsed %= cycleDuration;
-                lastChange = now - elapsed;
-            }
-
-            if (elapsed >= pulseWindow)
-            {
-                return colorIdle;
-            }
-
-            const tms_t slot = elapsed / static_cast<tms_t>(flashDuration);
-            return (slot % 2 == 0) ? colorFlash : colorIdle;
-        }
-        MultipleFlashesPattern(CRGB colorFlash, size_t flashCount, CRGB colorIdle=CRGB::Black, size_t idleDuration=1000) : colorFlash(colorFlash), flashCount(flashCount), colorIdle(colorIdle), idleDuration(idleDuration) {}
-    };
-
-    class BlinkPattern : public AnimationPattern
-    {
-    private:
-        tms_t lastChange{0};
-        bool state{false};
-        CRGB color0;
-        tms_t time0;
-        CRGB color1;
-        tms_t time1;
-
-    public:
-        void Reset(tms_t now) override
-        {
-            lastChange = now;
-            state = true;
-        }
-        CRGB Animate(tms_t now) override
-        {
-            if (state)
-            {
-                if (lastChange + time1 <= now)
-                {
-                    state = false;
-                    lastChange = now;
-                    // LOGI(TAG, "Animation to %d", color0.raw32);
-                }
-            }
-            else
-            {
-                if (lastChange + time0 <= now)
-                {
-                    state = true;
-                    lastChange = now;
-                    // LOGI(TAG, "Animation to %d", color1.raw32);
-                }
-            }
-            return state ? color1 : color0;
-        }
-        BlinkPattern(CRGB color0, tms_t time0, CRGB color1, tms_t time1) : color0(color0), time0(time0), color1(color1), time1(time1) {}
-    };
-
     template <size_t LEDSIZE, DeviceType DEVICE>
-    class M
+    class RgbStrip : public IAnimatableLED
     {
     private:
-        // static constexpr size_t  LED_DMA_BUFFER_SIZE =((LEDSIZE * 16 * (24/4)))+1;
         // 3.2MHz --> spi bit time = 312,5ns
         // 4 spi bits are used to transfer one WS2812 bit
         // data bit time = 1250ns
         // reset impulse = 50us = 40 data bit time (48 to be safe and have a "modulo 8==0" number to improve memory alignment)
         static constexpr size_t LED_DMA_BUFFER_SIZE = (LEDSIZE * 24 /*data bits per LED*/ + 48 /*reset pulse*/) * 4 /*spi bits per data bit*/ / 8 /*bits per byte*/;
-        uint16_t *buffer;
+        uint16_t *buffer{nullptr};
         uint32_t table[LEDSIZE];
-        AnimationPattern *patterns[LEDSIZE];
+        AnimationPattern *patterns[LEDSIZE]{};
+        AutoOffDeadline autoOff[LEDSIZE];
         bool dirty{true};
         spi_device_handle_t spi_device_handle = NULL;
 
-    public:
-        M() {}
+        static tms_t NowMs() { return esp_timer_get_time() / 1000; }
 
-        ErrorCode SetPixel(size_t index, CRGB color, bool refresh = false)
+    public:
+        RgbStrip() {}
+
+        ErrorCode SetPixel(size_t index, CRGB color, bool refresh = false) override
         {
             if (index >= LEDSIZE)
                 return ErrorCode::INDEX_OUT_OF_BOUNDS;
@@ -155,24 +63,45 @@ namespace RGBLED
             return ErrorCode::OK;
         }
 
-        ErrorCode AnimatePixel(size_t index, AnimationPattern *pattern)
+        ErrorCode AnimatePixel(size_t index, AnimationPattern *pattern, tms_t timeToAutoOff = 0) override
         {
             if (index >= LEDSIZE)
                 return ErrorCode::INDEX_OUT_OF_BOUNDS; // TODO: RaceCondition: Set,Animate und Refresh müssen gegenseitig verriegelt werden...
-            tms_t now = (esp_timer_get_time() / 1000);
-            pattern->Reset(now);
+            tms_t now = NowMs();
+            if (pattern == patterns[index])
+            {
+                ESP_LOGD(TAG, "Pixel %u already animating with the same pattern", index);
+                return ErrorCode::OK;
+            }
             patterns[index] = pattern;
-            table[index] = CRGB::TRANSPARENT;
+            autoOff[index].Arm(now, timeToAutoOff);
+            if (pattern != nullptr)
+            {
+                pattern->Reset(now);
+                table[index] = CRGB::TRANSPARENT;
+            }
             return ErrorCode::OK;
         }
 
-        ErrorCode Refresh(uint32_t timeout_ms = 1000, bool forceRefreshEvenIfNotNecessary = false)
+        ErrorCode Refresh(uint32_t timeout_ms = 1000, bool forceRefreshEvenIfNotNecessary = false) override
         {
             uint32_t i;
             int n = 0;
-            tms_t now = (esp_timer_get_time() / 1000);
+            tms_t now = NowMs();
             for (i = 0; i < LEDSIZE; i++)
             {
+                if (patterns[i] != nullptr && autoOff[i].Expired(now))
+                {
+                    patterns[i] = nullptr;
+                    ESP_LOGI(TAG, "Pixel %u switched off (auto-off)", i);
+                    CRGB black = CRGB::Black;
+                    if (this->table[i] != black.raw32)
+                    {
+                        this->table[i] = black.raw32;
+                        this->dirty = true;
+                    }
+                    continue;
+                }
                 AnimationPattern *p = patterns[i];
                 if (p == nullptr) continue;
                 // avoid using SetPixel here, as this may have unintentional consequences
@@ -289,7 +218,7 @@ namespace RGBLED
             return ErrorCode::OK;
         }
 
-        ErrorCode Clear(uint32_t timeout_ms = 1000)
+        ErrorCode Clear(uint32_t timeout_ms = 1000) override
         {
             CRGB black = CRGB::Black;
             memset(table, black.raw32, LEDSIZE * sizeof(uint32_t));
@@ -298,7 +227,9 @@ namespace RGBLED
             return Refresh(timeout_ms);
         }
 
-        ErrorCode Begin(const spi_host_device_t spi_host, const gpio_num_t gpio, const spi_dma_chan_t dma_channel=SPI_DMA_CH_AUTO)
+        size_t Size() const override { return LEDSIZE; }
+
+        ErrorCode Begin(const spi_host_device_t spi_host, const gpio_num_t gpio, const spi_dma_chan_t dma_channel = SPI_DMA_CH_AUTO)
         {
             spi_bus_config_t bus_config = {};
             bus_config.miso_io_num = GPIO_NUM_NC;
