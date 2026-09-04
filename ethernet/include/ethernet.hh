@@ -1,8 +1,3 @@
-
-#if not defined(CONFIG_ETH_SPI_ETHERNET_W5500)
-    #error CONFIG_ETH_SPI_ETHERNET_W5500 must be activated in idf menuconfig
-#endif
-
 #pragma once
 
 #include "esp_netif.h"
@@ -13,7 +8,11 @@
 #include "driver/spi_master.h"
 #include "esp_err.h"
 #include <esp_sntp.h>
-#include <esp_eth_mac_spi.h>
+// Der W5500-MAC/PHY-Treiber ist seit ESP-IDF 6.0 kein Bestandteil des Kern-esp_eth-Komponente mehr
+// (kein CONFIG_ETH_SPI_ETHERNET_W5500-Kconfig-Symbol -> #error, da nie definierbar), sondern ein
+// eigenstaendiges Managed Component "espressif/w5500" (s. idf_component.yml neben dieser Komponente).
+#include <esp_eth_mac_w5500.h>
+#include <esp_eth_phy_w5500.h>
 #include <ctime>
 
 #define TAG "ETH"
@@ -97,7 +96,7 @@ namespace ETHERNET
         spi_devcfg.spics_io_num = (int)cs; // 10;
         
         eth_w5500_config_t w5500_config = ETH_W5500_DEFAULT_CONFIG(spiHost, &spi_devcfg);
-        w5500_config.int_gpio_num = (int)irq; // 14;
+        w5500_config.base.int_gpio_num = (int)irq; // 14;
         esp_eth_mac_t *mac_spi = esp_eth_mac_new_w5500(&w5500_config, &mac_config_spi);
         esp_eth_phy_t *phy_spi = esp_eth_phy_new_w5500(&phy_config_spi);
 
