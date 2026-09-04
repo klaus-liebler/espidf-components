@@ -99,7 +99,7 @@ namespace TAS580x
 		constexpr uint8_t SELECT_BOOK = 0x7F;
 	}
 
-	class M:public CodecManager::I2sWithHardwareVolume
+	class M:public CodecManager::aI2sCodecManager
 	{
 	private:
 		i2c::iI2CBus* i2c_bus;
