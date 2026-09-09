@@ -9,7 +9,7 @@ constexpr char rf24_crclength[][9] = {"Disabled", "8 bits", "16 bits"};
 constexpr char rf24_pa_dbm[][5] = {"MIN", "LOW", "HIGH", "MAX"};
 	void Nrf24Receiver::configRegister(uint8_t reg, uint8_t value)
 	{
-		buf16[0] = (W_REGISTER | (REGISTER_MASK & reg));
+		buf16[0] = (REG::W_REGISTER | (REG::REGISTER_MASK & reg));
 		buf16[1] = value;
 		spiTransaction(buf16, 2);
 	}
@@ -22,20 +22,20 @@ constexpr char rf24_pa_dbm[][5] = {"MIN", "LOW", "HIGH", "MAX"};
 
 	void Nrf24Receiver::writeRegistersStartingWith1inBuf(uint8_t reg, size_t len)
 	{
-		buf16[0] = (W_REGISTER | (REGISTER_MASK & reg));
+		buf16[0] = (REG::W_REGISTER | (REG::REGISTER_MASK & reg));
 		spiTransaction(buf16, 1 + len);
 	}
 
 	uint8_t Nrf24Receiver::readRegister(uint8_t reg)
 	{
-		buf16[0] = (R_REGISTER | (REGISTER_MASK & reg));
+		buf16[0] = (REG::R_REGISTER | (REG::REGISTER_MASK & reg));
 		spiTransaction(buf16, 2);
 		return buf16[1];
 	}
 
 	void Nrf24Receiver::readRegisters(uint8_t reg, uint8_t len)
 	{
-		buf16[0] = (R_REGISTER | (REGISTER_MASK & reg));
+		buf16[0] = (REG::R_REGISTER | (REG::REGISTER_MASK & reg));
 		spiTransaction(buf16, 1 + len);
 	}
 
@@ -146,7 +146,7 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 */
 	void Nrf24Receiver::GetRxData(uint8_t *data) // Reads payload bytes into data array
 	{
-		data[0] = R_RX_PAYLOAD;
+		data[0] = REG::R_RX_PAYLOAD;
 		spiTransaction(data, payloadLen + 1);
 		// Pull up chip select
 		// NVI: per product spec, p 67, note c:
@@ -176,7 +176,7 @@ First returned byte is status. data buffer must have a length of min PAYLOAD_LEN
 
 	void Nrf24Receiver::FlushRx()
 	{
-		singleByteCommand(FLUSH_RX);
+		singleByteCommand(REG::FLUSH_RX);
 	}
 
 	void Nrf24Receiver::PowerDown()
