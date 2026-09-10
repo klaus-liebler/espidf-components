@@ -140,27 +140,36 @@ namespace PCA9685
 	{
 		i2c::iI2CDevice* i2c_device = nullptr;
 		RETURN_ON_ERRORCODE(EnsureDevice(i2c_bus, device, i2c_device));
-		RETURN_ON_ERRORCODE(SoftwareReset(i2c_bus));
-		
-		//Sleep in to be able to program the frequency
-		RETURN_ON_ERRORCODE(WriteSingleReg(i2c_device, MODE1, 1 << MODE1_SLEEP));
 
-		// PRE_SCALE Register (possible in sleep mode only)
-		RETURN_ON_ERRORCODE(WriteSingleReg(i2c_device, PRE_SCALE, (uint8_t)(freq)));
+		ErrorCode result;
+		do
+		{
+			//Sleep in to be able to program the frequency
+			result = WriteSingleReg(i2c_device, MODE1, 1 << MODE1_SLEEP);
+			if (result != ErrorCode::OK) break;
 
-		/* MODE1 Register:
-		 * Internal clock, not external
-		 * Register Auto-Increment enabled
-		 * Normal mode (not sleep)
-		 * Does not respond to subaddresses
-		 * Does not respond to All Call I2C-bus address
-		 */
-		RETURN_ON_ERRORCODE(WriteSingleReg(i2c_device, MODE1, (1 << MODE1_AI)));
+			// PRE_SCALE Register (possible in sleep mode only)
+			result = WriteSingleReg(i2c_device, PRE_SCALE, (uint8_t)(freq));
+			if (result != ErrorCode::OK) break;
 
-		/* MODE2 Register:
-		 * Outputs change on STOP command
-		 */
-		RETURN_ON_ERRORCODE(WriteSingleReg(i2c_device, MODE2, ((uint8_t)inv << MODE2_INVRT) | ((uint8_t)outdrv << MODE2_OUTDRV) | ((uint8_t)outne << MODE2_OUTNE0)));
+			/* MODE1 Register:
+			 * Internal clock, not external
+			 * Register Auto-Increment enabled
+			 * Normal mode (not sleep)
+			 * Does not respond to subaddresses
+			 * Does not respond to All Call I2C-bus address
+			 */
+			result = WriteSingleReg(i2c_device, MODE1, (1 << MODE1_AI));
+			if (result != ErrorCode::OK) break;
+
+			/* MODE2 Register:
+			 * Outputs change on STOP command
+			 */
+			result = WriteSingleReg(i2c_device, MODE2, ((uint8_t)inv << MODE2_INVRT) | ((uint8_t)outdrv << MODE2_OUTDRV) | ((uint8_t)outne << MODE2_OUTNE0));
+		} while (false);
+
+		i2c_bus->DeleteDevice(&i2c_device);
+		RETURN_ON_ERRORCODE(result);
 
 		// Switch all off
 		return SetOutputs(i2c_bus, device, 0x0001, 0);
@@ -191,6 +200,7 @@ namespace PCA9685
 			offValue = (val >> 4); // + onValue; //to make a 12bit-Value
 		}
 		uint8_t i = 0;
+		ErrorCode result = ErrorCode::OK;
 		while (mask > 0)
 		{
 			while (mask > 0 && !(mask & 0x0001))
@@ -212,9 +222,14 @@ namespace PCA9685
 				data[4 * j + 2] = (uint8_t)(offValue & 0xFF);
 				data[4 * j + 3] = (uint8_t)((offValue >> 8) & 0xFF);
 			}
-			RETURN_ON_ERRORCODE(WriteReg(i2c_device, LEDn_ON_L(firstOne), (uint8_t *)data, 4 * ones));
+			result = WriteReg(i2c_device, LEDn_ON_L(firstOne), (uint8_t *)data, 4 * ones);
+			if (result != ErrorCode::OK)
+			{
+				break;
+			}
 		}
-		return ErrorCode::OK;
+		i2c_bus->DeleteDevice(&i2c_device);
+		return result;
 	}
 
 	/**
