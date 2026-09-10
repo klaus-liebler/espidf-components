@@ -8,6 +8,7 @@ namespace i2c {
 
 class iI2CDevice{
     public:
+    virtual ~iI2CDevice() = default;
     // Old names mapping:
     // ReadReg -> ReadRegister
     // ReadReg16 -> ReadRegisterAddress16

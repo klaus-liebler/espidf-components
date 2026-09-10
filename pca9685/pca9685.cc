@@ -124,6 +124,7 @@ namespace PCA9685
 		//ESP_LOGI(TAG, "first=%d, last=%d, bytesToWrite=%i, buffer[0...5]=%04X %04X %04X %04X %04X %04X", firstOutput, lastOutput, bytesToWrite, buffer[0], buffer[1], buffer[2], buffer[3], buffer[4], buffer[5]);
 		if (this->i2c_device == nullptr)
 		{
+			ESP_LOGE(TAG, "Device 0x%02X: i2c device is null, cannot write outputs", this->GetDeviceAddress());
 			return ErrorCode::NOT_YET_INITIALIZED;
 		}
 
@@ -133,7 +134,12 @@ namespace PCA9685
 			write_buf[2 * i] = (uint8_t)(buffer[i] & 0xFF);
 			write_buf[2 * i + 1] = (uint8_t)((buffer[i] >> 8) & 0xFF);
 		}
-		return WriteReg(this->i2c_device, (uint8_t)(0x06 + 4 * firstOutput), write_buf, bytesToWrite);
+		ErrorCode ret = WriteReg(this->i2c_device, (uint8_t)(0x06 + 4 * firstOutput), write_buf, bytesToWrite);
+		if (ret != ErrorCode::OK)
+		{
+			ESP_LOGE(TAG, "Device 0x%02X: WriteReg failed with error %d", this->GetDeviceAddress(), (int)ret);
+		}
+		return ret;
 	}
 
 	ErrorCode M::SetupStatic(i2c::iI2CBus* i2c_bus, Device device, InvOutputs inv, OutputDriver outdrv, OutputNotEn outne, Frequency freq)
@@ -271,7 +277,7 @@ namespace PCA9685
 	{
 		if (this->i2c_device == nullptr)
 		{
-			//ESP_LOGE(TAG, "i2c device is null");
+			ESP_LOGE(TAG, "Device 0x%02X: i2c device is null", this->GetDeviceAddress());
 			return ErrorCode::NOT_YET_INITIALIZED;
 		}
 		// Optional: PCA9685_I2C_SlaveAtAddress(Address), might make things slower
@@ -298,7 +304,7 @@ namespace PCA9685
 	{
 			if (this->i2c_device == nullptr)
 		{
-			//ESP_LOGE(TAG, "i2c device is null");
+			ESP_LOGE(TAG, "Device 0x%02X: i2c device is null", this->GetDeviceAddress());
 			return ErrorCode::NOT_YET_INITIALIZED;
 		}
 		uint16_t offValue;
