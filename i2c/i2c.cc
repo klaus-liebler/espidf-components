@@ -298,6 +298,18 @@ ErrorCode iI2CBus_Impl::CreateDevice(const uint8_t address7bit, iI2CDevice **dev
     return ErrorCode::OK;
 }
 
+ErrorCode iI2CBus_Impl::DeleteDevice(iI2CDevice **device) {
+    if (device == nullptr || *device == nullptr) {
+        return ErrorCode::GENERIC_ERROR;
+    }
+
+    iI2CDevice_Impl *impl = static_cast<iI2CDevice_Impl *>(*device);
+    ErrorCode result = i2c_master_bus_rm_device(impl->GetDevHandle()) == ESP_OK ? ErrorCode::OK : ErrorCode::GENERIC_ERROR;
+    delete impl;
+    *device = nullptr;
+    return result;
+}
+
 iI2CDevice* iI2CBus_Impl::GetGeneralCallDevice() {
     return general_call_device;
 }

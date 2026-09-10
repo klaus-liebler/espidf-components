@@ -22,6 +22,8 @@ private:
 public:
     iI2CDevice_Impl(i2c_master_bus_handle_t bus_handle, i2c_master_dev_handle_t dev_handle, uint8_t address7bit);
 
+    i2c_master_dev_handle_t GetDevHandle() const { return dev_handle; }
+
     ErrorCode ReadRegister(const uint8_t reg_addr, uint8_t *reg_data, size_t len = 1) override;
     ErrorCode ReadRegisterAddress16(const uint16_t reg_addr16, uint8_t *reg_data, size_t len) override;
     ErrorCode ReadRegisterU16BE(const uint8_t reg_addr, uint16_t *reg_data) override;
@@ -47,6 +49,7 @@ public:
     ErrorCode Init(i2c_port_t port, gpio_num_t scl, gpio_num_t sda);
     ErrorCode SetDefaultSpeed(I2CSpeed speed);
     ErrorCode CreateDevice(const uint8_t address7bit, iI2CDevice **device) override;
+    ErrorCode DeleteDevice(iI2CDevice **device) override;
     iI2CDevice* GetGeneralCallDevice() override;
     ErrorCode ProbeAddress(const uint8_t address7bit) override;
     ErrorCode Scan(FILE *fp, const char* busname) override;

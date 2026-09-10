@@ -48,6 +48,8 @@ enum class I2CSpeed {
 class iI2CBus{
     public:
     virtual ErrorCode CreateDevice(const uint8_t address7bit, iI2CDevice **device)=0;
+    // Releases a device created by CreateDevice and nulls *device. Do not call for the general-call device.
+    virtual ErrorCode DeleteDevice(iI2CDevice **device)=0;
     // Returns a cached device for general-call address 0x00, or nullptr if unsupported.
     virtual iI2CDevice* GetGeneralCallDevice()=0;
     virtual ErrorCode ProbeAddress(const uint8_t address7bit)=0;
