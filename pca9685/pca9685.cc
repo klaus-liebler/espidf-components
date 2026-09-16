@@ -90,8 +90,10 @@ namespace PCA9685
 				break;
 			firstOutput++;
 		}
-		if (firstOutput == 16)
+		if (firstOutput == 16) [[likely]]
 		{
+			// Bei 20ms-Takt (s. I2CBusmaster::Task) der Normalfall: nichts hat sich seit dem letzten
+			// Aufruf geaendert, also kein I2C-Zugriff noetig.
 			return ErrorCode::OK;
 		}
 		for (int output = firstOutput; output < 16; output++)
