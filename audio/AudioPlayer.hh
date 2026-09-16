@@ -5,6 +5,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <algorithm>
+#include <span>
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <freertos/semphr.h>
@@ -52,14 +53,13 @@ namespace AudioPlayer
 
     struct AudioOrder{
         AudioType type;
-        const uint8_t *file;
-        size_t fileLen;
+        std::span<const uint8_t> file;
         uint32_t sampleRate;//0 means "auto detect"
         uint8_t volume;//0 means: do not change volume
         bool cancelPrevious; //false means: play current AudioOrder to its end
     };
 
-    constexpr AudioOrder SILENCE_ORDER{AudioType::SILENCE, nullptr, 0, 0, 0, true};
+    constexpr AudioOrder SILENCE_ORDER{.type=AudioType::SILENCE, .file={}, .sampleRate=0, .volume=0, .cancelPrevious=true};
 
 
     class Player
@@ -73,8 +73,8 @@ namespace AudioPlayer
         AudioOrder currentOrder;
         
 
-        static int FindSyncWordOnAnyPosition(const uint8_t *file, size_t fileLen, int offset){
-            for (int i = offset; i < fileLen - 1; i++)
+        static int FindSyncWordOnAnyPosition(std::span<const uint8_t> file, int offset){
+            for (int i = offset; i < (int)file.size() - 1; i++)
             {
                 if ((file[i + 0] & MP3::SYNCWORDH) == MP3::SYNCWORDH && (file[i + 1] & MP3::SYNCWORDL) == MP3::SYNCWORDL)
                     return i;
@@ -86,13 +86,13 @@ namespace AudioPlayer
 
 
         ErrorCode LoopPCM(){
-            codecManager->WriteAudioData(CodecManager::eChannels::TWO, CodecManager::eSampleBits::SIXTEEN, 44100, currentOrder.fileLen/4, (void*)currentOrder.file);//TODO AudioFormat!
+            codecManager->WriteAudioData(CodecManager::eChannels::TWO, CodecManager::eSampleBits::SIXTEEN, 44100, currentOrder.file.size()/4, (void*)currentOrder.file.data());//TODO AudioFormat!
             currentOrder=SILENCE_ORDER;
             return ErrorCode::OK;
         }
-        
+
         ErrorCode LoopMP3(){
-            if (frameStart >= currentOrder.fileLen)
+            if (frameStart >= (int32_t)currentOrder.file.size())
             {
                 ESP_LOGI(TAG, "Reached End of MP3 File.");
                 currentOrder=SILENCE_ORDER;
@@ -105,9 +105,18 @@ namespace AudioPlayer
             //-->Ein Frame dauert maximal 24ms
             //-->Decodiere immer 4 Frames, damit wir knapp 100ms überbrücken können
             for(int i=0;i<MP3::FRAMES_IN_BUFFER;i++){
-                int bytesLeft = currentOrder.fileLen - frameStart;
-                samples += mp3dec_decode_frame(decoder, currentOrder.file + frameStart, bytesLeft, buf, &info);
+                int bytesLeft = currentOrder.file.size() - frameStart;
+                samples += mp3dec_decode_frame(decoder, currentOrder.file.data() + frameStart, bytesLeft, buf, &info);
                 this->frameStart += info.frame_bytes;
+                if(samples==0 && info.frame_bytes==0){
+                    // Kein Sample UND kein Fortschritt: mp3dec_decode_frame kann an dieser Position keinen
+                    // vollstaendigen Frame mehr parsen (z.B. abgeschnittener/unvollstaendiger letzter Frame
+                    // am Dateiende). frameStart wuerde sonst nie mehr voranschreiten -> Endlos-Stall, statt
+                    // die Wiedergabe zu beenden.
+                    ESP_LOGW(TAG, "MP3 decode stuck at offset %ld (no full frame left) -> stopping playback.", frameStart);
+                    currentOrder=SILENCE_ORDER;
+                    return ErrorCode::OK;
+                }
                 if(samples==0) break;
                 buf=this->outBuffer+(samples*info.channels); //kein "+=", weil ja die samples bereits summiert werden!
             }
@@ -123,7 +132,7 @@ namespace AudioPlayer
         }
 
         ErrorCode InitMP3(){
-            frameStart = FindSyncWordOnAnyPosition(currentOrder.file, currentOrder.fileLen, 0);
+            frameStart = FindSyncWordOnAnyPosition(currentOrder.file, 0);
             if (frameStart < 0)
             {
                 ESP_LOGE(TAG, "No synch word found in file!");
@@ -134,7 +143,7 @@ namespace AudioPlayer
             if(currentOrder.volume!=0){
                 codecManager->SetVolume(currentOrder.volume);
             }
-            ESP_LOGI(TAG, "Successfully initialized a new MP3 sound play task. File=%p; FileLen=%zu; FrameStart=%ld;", currentOrder.file, currentOrder.fileLen, frameStart);
+            ESP_LOGI(TAG, "Successfully initialized a new MP3 sound play task. File=%p; FileLen=%zu; FrameStart=%ld;", currentOrder.file.data(), currentOrder.file.size(), frameStart);
             return ErrorCode::OK;
         }
 
@@ -144,7 +153,7 @@ namespace AudioPlayer
             if(currentOrder.volume!=0){
                 codecManager->SetVolume(currentOrder.volume);
             }
-            ESP_LOGI(TAG, "Successfully initialized a new PCM sound play task. File=%p; FileLen=%zu; SampleRate %lu", currentOrder.file, currentOrder.fileLen, currentOrder.sampleRate);
+            ESP_LOGI(TAG, "Successfully initialized a new PCM sound play task. File=%p; FileLen=%zu; SampleRate %lu", currentOrder.file.data(), currentOrder.file.size(), currentOrder.sampleRate);
             return ESP_OK;
         }
 
@@ -160,28 +169,27 @@ namespace AudioPlayer
             return currentOrder.type!=AudioType::SILENCE;
         }
 
-        esp_err_t PlayMP3(const uint8_t *file, size_t fileLen, uint8_t volume, bool cancelPrevious)
+        [[nodiscard]] ErrorCode PlayMP3(std::span<const uint8_t> file, uint8_t volume, bool cancelPrevious)
         {
-            if(!orderQueue) return ESP_FAIL;
-            if(file==nullptr || fileLen==0){
+            if(!orderQueue) return ErrorCode::NOT_YET_INITIALIZED;
+            if(file.empty()){
                 xQueueOverwrite(orderQueue, &SILENCE_ORDER);
-                return ESP_OK;
+                return ErrorCode::OK;
             }
-            AudioOrder ao{AudioType::MP3, file, fileLen, 0, volume, cancelPrevious};
+            AudioOrder ao{.type=AudioType::MP3, .file=file, .sampleRate=0, .volume=volume, .cancelPrevious=cancelPrevious};
             xQueueOverwrite(orderQueue, &ao);
-            return ESP_OK;
+            return ErrorCode::OK;
         }
 
-        esp_err_t PlayPCM(const uint8_t *file, size_t fileLen, uint32_t sampleRate, uint8_t volume,  bool cancelPrevious)
+        [[nodiscard]] ErrorCode PlayPCM(std::span<const uint8_t> file, uint32_t sampleRate, uint8_t volume, bool cancelPrevious)
         {
-
-            if(!orderQueue) return ESP_FAIL;
-            AudioOrder ao{AudioType::PCM, file, fileLen, sampleRate, volume, cancelPrevious};
+            if(!orderQueue) return ErrorCode::NOT_YET_INITIALIZED;
+            AudioOrder ao{.type=AudioType::PCM, .file=file, .sampleRate=sampleRate, .volume=volume, .cancelPrevious=cancelPrevious};
             xQueueOverwrite(orderQueue, &ao);
-            return ESP_OK;
+            return ErrorCode::OK;
         }
 
-        ErrorCode Stop()
+        [[nodiscard]] ErrorCode Stop()
         {
             if(!orderQueue) return ErrorCode::NOT_YET_INITIALIZED;
             xQueueOverwrite(orderQueue, &SILENCE_ORDER);
