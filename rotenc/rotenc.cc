@@ -46,12 +46,12 @@ esp_err_t cRotaryEncoder::Init(StepMode stepMode)
 	gpio_set_direction(phase_a_gpio_num, GPIO_MODE_INPUT);
 	gpio_set_direction(phase_b_gpio_num, GPIO_MODE_INPUT);
     
-	gpio_pullup_en(phase_a_gpio_num);
-	gpio_pullup_en(phase_b_gpio_num);
+	if(phase_a_gpio_num!=GPIO_NUM_NC && GPIO_IS_VALID_OUTPUT_GPIO(phase_a_gpio_num)) gpio_pullup_en(phase_a_gpio_num); // input-only pads (GPIO34..39 on ESP32) have no internal pull-up
+	if(phase_b_gpio_num!=GPIO_NUM_NC && GPIO_IS_VALID_OUTPUT_GPIO(phase_b_gpio_num)) gpio_pullup_en(phase_b_gpio_num); // input-only pads (GPIO34..39 on ESP32) have no internal pull-up
     
     if(sw_gpio_num != GPIO_NUM_NC){
         gpio_set_direction(sw_gpio_num, GPIO_MODE_INPUT);
-        gpio_pullup_en(sw_gpio_num);
+        if(sw_gpio_num!=GPIO_NUM_NC && GPIO_IS_VALID_OUTPUT_GPIO(sw_gpio_num)) gpio_pullup_en(sw_gpio_num); // input-only pads (GPIO34..39 on ESP32) have no internal pull-up
     }
 
     //Ich erlaube nicht die Softwareseitige Erweitereung der Grenzen

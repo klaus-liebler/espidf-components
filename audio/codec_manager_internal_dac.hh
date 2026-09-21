@@ -2,18 +2,28 @@
 #include <stdint.h>
 #include <errorcodes.hh>
 #include "codec_manager.hh"
+#include <esp_log.h>
+#undef TAG
+#define TAG "CODEC_DAC"
 
 #include "driver/dac_continuous.h"
 namespace CodecManager{
-	class InternalDacWithPotentiometer : public iCodecManager
+	class InternalDacWithPotentiometer : public aCodecManager
     {
     private:
         uint32_t currentSampleRateHz{24000};
         dac_continuous_handle_t dac_handle{nullptr};
+        bool enabled{false};
 
     public:
+        // Power = DAC-DMA laeuft. Ohne neue Daten wuerde der DMA den letzten Puffer zyklisch wiederholen
+        // (hoerbar als Klackern/Brummen), deshalb im Leerlauf abschalten.
         ErrorCode SetPowerState(bool power) override
         {
+            if(!dac_handle || power==enabled) return ErrorCode::OK;
+            if(power) ESP_ERROR_CHECK(dac_continuous_enable(dac_handle));
+            else ESP_ERROR_CHECK(dac_continuous_disable(dac_handle));
+            enabled=power;
             return ErrorCode::OK;
         }
 
@@ -26,12 +36,16 @@ namespace CodecManager{
         {
             if (sampleRateHz == currentSampleRateHz)
                 return ErrorCode::OK;
-            ESP_ERROR_CHECK(dac_continuous_disable(this->dac_handle));
+            bool wasOn = enabled;
+            SetPowerState(false);
             dac_continuous_del_channels(dac_handle);
+            dac_handle=nullptr;
             currentSampleRateHz = sampleRateHz;
-            return Init();
+            ErrorCode e = Init();
+            if(wasOn) SetPowerState(true);
+            return e;
         }
-        ErrorCode Init() override
+        ErrorCode Init()
         {
 
             ESP_LOGI(TAG, "Initializing I2S_NUM_0 for internal DAC with sample rate %lu", this->currentSampleRateHz);
@@ -45,12 +59,15 @@ namespace CodecManager{
             cont_cfg.chan_mode = DAC_CHANNEL_MODE_SIMUL; // Hat nur einen Effekt, wenn mehrere Kanäle aktiv sind
             /* Allocate continuous channels */
             ESP_ERROR_CHECK(dac_continuous_new_channels(&cont_cfg, &this->dac_handle));
-            ESP_ERROR_CHECK(dac_continuous_enable(this->dac_handle));
+            // Der DAC wird erst durch SetPowerState(true) (Player, bei Sound-Start) aktiviert
+            enabled=false;
             return ErrorCode::OK;
         }
 
         ErrorCode WriteAudioData(eChannels ch, eSampleBits bits, uint32_t sampleRateHz, size_t samples, void *buf) override
         {
+            // DAC-Takt an die Abtastrate des Materials anpassen (sonst falsche Tonhoehe/Abspielgeschwindigkeit)
+            SetSampleRate(sampleRateHz);
             // Needs Mono, 8bit
             size_t dummy;
             uint8_t newBuf[samples];
@@ -122,3 +139,4 @@ namespace CodecManager{
         }
     };
 }
+#undef TAG
