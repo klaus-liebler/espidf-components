@@ -173,19 +173,21 @@ namespace PID_T1
     T *setpoint; //   PID, freeing the user from having to constantly tell us
                  //   what these values are.  with pointers we'll just know.
 
-    T a1;
-    T a2;
-    T b0;
-    T b1;
-    T b2;
-    T b0_windup;
-    T b1_windup;
-    T b2_windup;
-    T y_1;
-    T y_2;
-    T e_1;
-    T e_2;
-    T workingPointOffset;
+    //Alle Zustaende mit 0 initialisieren: ohne Initialisierung stand v.a. lastTimeMs auf Zufallswerten
+    //(Compute() rechnete dann ggf. nie, weil nowMs - lastTimeMs < cycleTimeMs blieb)
+    T a1{0};
+    T a2{0};
+    T b0{0};
+    T b1{0};
+    T b2{0};
+    T b0_windup{0};
+    T b1_windup{0};
+    T b2_windup{0};
+    T y_1{0};
+    T y_2{0};
+    T e_1{0};
+    T e_2{0};
+    T workingPointOffset{0};
     T kpAsSetByUser = 0.0;
     int64_t tnAsSetByUser = INT64_MAX;
     int64_t tvAsSetByUser = 0;
@@ -197,7 +199,7 @@ namespace PID_T1
     Direction direction;
     int64_t cycleTimeMs;
 
-    int64_t lastTimeMs;
+    int64_t lastTimeMs{0};
   };
 }
 #undef TAG
