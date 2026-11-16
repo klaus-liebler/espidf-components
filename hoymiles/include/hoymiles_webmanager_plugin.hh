@@ -59,39 +59,29 @@ namespace hoymiles
             p.dataAgeMs = data.DataAgeMs;
             Fill(data, p.dc, p.ac, p.totals);
 
-            uint8_t buf[WsProtocol::hoymiles::NotifyLiveData_MAX_SIZE];
+            uint8_t buf[WsProtocol::hoymiles::NotifyLiveData::NotifyLiveData_MAX_SIZE];
             size_t len = WsProtocol::hoymiles::NotifyLiveData::Encode(p, buf, sizeof(buf));
             if (len > 0) (void)callback->SendRawAsync(buf, len);
         }
 
-        webmanager::eMessageReceiverResult ProvideWebsocketMessage(webmanager::iWebmanagerCallback* callback, httpd_req_t* req, httpd_ws_frame_t* ws_pkt, uint16_t namespaceId, uint16_t messageTypeId, const uint8_t* frame, size_t frameLen) override
+        webmanager::eMessageReceiverResult ProvideWebsocketMessage(webmanager::iWebmanagerCallback* callback, WsProtocol::Responder& reply, const uint8_t* frame, size_t frameLen) override
         {
+            namespace hm = WsProtocol::hoymiles;
             this->callback = callback;
-            if (namespaceId != WsProtocol::hoymiles::NAMESPACE_ID)
-                return webmanager::eMessageReceiverResult::NOT_FOR_ME;
-
-            if (messageTypeId == WsProtocol::hoymiles::RequestLiveData::TYPE_ID)
-            {
-                WsProtocol::hoymiles::RequestLiveData::Payload r{};
-                if (!WsProtocol::hoymiles::RequestLiveData::Decode(frame, frameLen, r))
-                    return webmanager::eMessageReceiverResult::FOR_ME_BUT_FAILED;
-
-                // Beantwortet mit dem letzten gecachten Snapshot -- die Web-Seite muss beim
-                // Oeffnen nicht bis zu pollIntervalMs auf den naechsten Notify-Push warten.
-                WsProtocol::hoymiles::ResponseLiveData::Payload resp{};
-                resp.requestId = r.requestId;
-                resp.reachable = last.Reachable;
-                resp.producing = last.Producing;
-                resp.dataAgeMs = last.DataAgeMs;
-                Fill(last, resp.dc, resp.ac, resp.totals);
-
-                uint8_t buf[WsProtocol::hoymiles::ResponseLiveData_MAX_SIZE];
-                size_t len = WsProtocol::hoymiles::ResponseLiveData::Encode(resp, buf, sizeof(buf));
-                return (len > 0 && callback->SendRawAsync(buf, len) == ESP_OK)
-                    ? webmanager::eMessageReceiverResult::OK
-                    : webmanager::eMessageReceiverResult::FOR_ME_BUT_FAILED;
-            }
-            return webmanager::eMessageReceiverResult::FOR_ME_BUT_FAILED;
+            if (reply.Request().namespaceId != hm::NAMESPACE_ID || reply.Request().messageTypeId != hm::RequestLiveData::TYPE_ID)
+                return webmanager::eMessageReceiverResult::NOT_FOR_ME;  // another type of hoymiles: UnknownMessage
+            return webmanager::Handle(reply, frame, frameLen, hm::RequestLiveData::Decode,
+                                      [this](WsProtocol::Responder& r, const hm::RequestLiveData::Payload&) {
+                                          // the last cached snapshot - the page need not wait up to
+                                          // pollIntervalMs for the next notify push
+                                          hm::ResponseLiveData::Payload resp{};
+                                          resp.reachable = last.Reachable;
+                                          resp.producing = last.Producing;
+                                          resp.dataAgeMs = last.DataAgeMs;
+                                          Fill(last, resp.dc, resp.ac, resp.totals);
+                                          r.Send(hm::ResponseLiveData::Encode, resp);
+                                          return webmanager::eMessageReceiverResult::OK;
+                                      });
         }
     };
 }
