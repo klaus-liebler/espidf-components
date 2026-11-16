@@ -22,12 +22,12 @@ namespace sunsetsunrise
     #define JD2000 (2451544.5)
     #define JD1970 (2440587.5) //2440587.5 is the julian day at 1/1/1970 0:00 UTC.
     #define UNIX_TIME_SECS_1_1_2000 (946684800)
-    float JulianDate(time_t unixSecs)
+    inline float JulianDate(time_t unixSecs)
     {
         return (unixSecs / 86400.0) + JD1970; 
     }
 
-    int32_t DaysSinceJan1_2020UTC(time_t unixSecs){
+    inline int32_t DaysSinceJan1_2020UTC(time_t unixSecs){
         return (unixSecs-UNIX_TIME_SECS_1_1_2000) / 86400.0; 
     }
     
