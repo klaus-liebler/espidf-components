@@ -1,143 +1,97 @@
 #pragma once
-#include <cinttypes>
+// Sonnenauf- und -untergang (auch buergerliche/nautische/astronomische Daemmerung) fuer einen Ort,
+// nach der Naeherung von Arnold Barmettler (Genauigkeit: wenige Minuten fuer mittlere Breiten).
+// Alle Zeiten in Unix-Sekunden (UTC); Breite/Laenge im Bogenmass (Ost/Nord positiv).
 #include <cmath>
-#include <bit>
-#include <cstdio>
 #include <cstdint>
-
-typedef int64_t tms_t;
+#include <ctime>
+#include <numbers>
 
 namespace sunsetsunrise
 {
-    
-    // Sunrise and Sunset DawnType
-    enum class eDawn:int32_t{ //Value is 1E9*sin(dawn angle)
-        NORMAL    = std::bit_cast<std::int32_t>(sinf( -0.8333 * M_PI / 180.0)),
-        CIVIL     = std::bit_cast<std::int32_t>(sinf( -6.0000 * M_PI / 180.0)),
-        NAUTIC    = std::bit_cast<std::int32_t>(sinf(-12.0000 * M_PI / 180.0)),
-        ASTRONOMIC= std::bit_cast<std::int32_t>(sinf(-18.0000 * M_PI / 180.0)),
+    constexpr double PI = std::numbers::pi;
+    constexpr double DEG = PI / 180.0; // Grad -> Bogenmass
+    constexpr double JD1970 = 2440587.5; // julianisches Datum am 1.1.1970 0:00 UTC
+    constexpr int64_t UNIX_TIME_SECS_1_1_2000 = 946684800;
+    constexpr int64_t ONE_DAY = 24 * 60 * 60;
+
+    // Hoehe des Sonnenmittelpunkts ueber dem Horizont, ab der "Tag" ist, in Tausendstel Grad
+    enum class eDawn : int32_t
+    {
+        NORMAL = -833,         // Sonnenauf-/-untergang (Refraktion + Sonnenradius)
+        CIVIL = -6000,         // buergerliche Daemmerung
+        NAUTIC = -12000,       // nautische Daemmerung
+        ASTRONOMIC = -18000,   // astronomische Daemmerung
     };
 
-    #define RAD (M_PI / 180.0)
-    #define JD2000 (2451544.5)
-    #define JD1970 (2440587.5) //2440587.5 is the julian day at 1/1/1970 0:00 UTC.
-    #define UNIX_TIME_SECS_1_1_2000 (946684800)
-    inline float JulianDate(time_t unixSecs)
+    inline double JulianDate(time_t unixSecs)
     {
-        return (unixSecs / 86400.0) + JD1970; 
+        return (unixSecs / 86400.0) + JD1970;
     }
 
-    inline int32_t DaysSinceJan1_2020UTC(time_t unixSecs){
-        return (unixSecs-UNIX_TIME_SECS_1_1_2000) / 86400.0; 
-    }
-    
-    template <typename T>
-    T eps(T Tdays) // Neigung der Erdachse
+    inline int32_t DaysSinceJan1_2000UTC(time_t unixSecs)
     {
-        return RAD*(23.43929111 + (-46.8150*(Tdays/36525.0f) - 0.00059*(Tdays/36525.0f)*(Tdays/36525.0f) + 0.001813*(Tdays/36525.0f)*(Tdays/36525.0f)*(Tdays/36525.0f))/3600.0);
+        return (int32_t)((unixSecs - UNIX_TIME_SECS_1_1_2000) / ONE_DAY);
     }
 
-    // Time formula
-    // Tdays is the number of days since Jan 1 2000, and replaces T as the Tropical Century. T = Tdays / 36525.0
-    //DK=declination
-    //RA = right ascension
+    // Zeitgleichung in Stunden; DK = Deklination der Sonne. Tdays = Tage seit 1.1.2000.
     template <typename T>
     T TimeFormulaHours(T &DK, int32_t Tdays)
     {
-        T RA_Mean = std::fmod(18.71506921 + (2400.0513369 / 36525.0) * Tdays, 24.);//+(2.5862e-5 - 1.72e-9*T)*T*T;; // we keep only first order value as T is between 0.20 and 0.30
-        T M = std::fmod(((2. * M_PI * 0.993133) + (2. * M_PI * 99.997361 / 36525.0) * Tdays), 2. * M_PI);
-        T L = std::fmod((2. * M_PI * 0.7859453) + M + (6893.0 * sin(M) + 72.0 * sin(M + M) + (6191.2 / 36525.0) * Tdays) * (2. * M_PI / 1296.0e3), 2. * M_PI);
-
-        //double e = eps(Tdays);
-        //double cos_eps=cos(e);
-        //double sin_eps=sin(e);
-        T cos_eps = 0.91750f;     // precompute cos(eps) ->okkl!
-        T sin_eps = 0.39773f;     // precompute sin(eps) -->okkl
-	    T RA = atan(tan(L)*cos_eps);
-        
-
-        if (RA < 0.0f) RA += M_PI;
-        if (L > M_PI) RA += M_PI;
-        
-        RA = RA * (24. / (2. * M_PI));
-        
-        printf("M=%f, L=%f, RA_mean=%f, RA=%f\n", M, L, RA_Mean, RA);
-        
-        DK = asin(sin_eps * sin(L));
-        // Damit 0<=RA_Mittel<24 -->integared in first line
+        T RA_Mean = std::fmod(18.71506921 + (2400.0513369 / 36525.0) * Tdays, 24.);
+        T M = std::fmod(((2. * PI * 0.993133) + (2. * PI * 99.997361 / 36525.0) * Tdays), 2. * PI);
+        T L = std::fmod((2. * PI * 0.7859453) + M + (6893.0 * std::sin(M) + 72.0 * std::sin(M + M) + (6191.2 / 36525.0) * Tdays) * (2. * PI / 1296.0e3), 2. * PI);
+        const T cos_eps = 0.91750; // Neigung der Erdachse (eps ~ 23.44 Grad)
+        const T sin_eps = 0.39773;
+        T RA = std::atan(std::tan(L) * cos_eps);
+        if (RA < 0.0)
+            RA += PI;
+        if (L > PI)
+            RA += PI;
+        RA = RA * (24. / (2. * PI));
+        DK = std::asin(sin_eps * std::sin(L));
         T dRA = RA_Mean - RA;
         if (dRA < -12.0)
             dRA += 24.0;
         if (dRA > 12.0)
             dRA -= 24.0;
-
-        dRA = dRA * 1.0027379;
-        return dRA;
+        return dRA * 1.0027379;
     }
 
-    constexpr int64_t ONE_DAY{24*60*60};
-
+    // Auf- und Untergang am UTC-Kalendertag, in dem unixSecs liegt. false, wenn die Sonne an diesem
+    // Tag die Hoehe dawnLevel nicht kreuzt (Polartag/-nacht); die Ausgaben sind dann unveraendert.
     template <typename T>
-    void NextSunriseAndSunset(time_t unixSecs, T latitudeRadiant, T longitudeRadiant, eDawn dawnLevel, time_t& nextSunriseUnixSecs, time_t& nextSunsetUnixSecs)
+    bool SunriseAndSunsetOfDay(time_t unixSecs, T latitudeRadiant, T longitudeRadiant, eDawn dawnLevel, time_t &sunriseUnixSecs, time_t &sunsetUnixSecs)
     {
-        //wir gehen dann einen Tag nach vorne, runden durch ganzzahlige division auf Mitternacht und multiplizieren, um wieder die Sekunden zu bekommen
-        time_t nextMidnightUnixSecs=((unixSecs+ONE_DAY)/ONE_DAY)*ONE_DAY;
+        const time_t midnight = (unixSecs / ONE_DAY) * ONE_DAY;
         T DK{0};
-        int32_t Tdays = DaysSinceJan1_2020UTC(nextMidnightUnixSecs);
-        T discrepancy = TimeFormulaHours<T>(DK, Tdays);
-        T trueSunPeak = 12.0 - discrepancy;
-        const T localTimeShift=longitudeRadiant/(RAD * 15.0f);
-        const float sin_h = std::bit_cast<float>(dawnLevel);
-        T timeDifference = 12.0*acos((sin_h - sin(latitudeRadiant) * sin(DK)) / (cos(latitudeRadiant) * cos(DK)))/M_PI;
-        T sunriseWorldTimeHours = trueSunPeak - timeDifference - localTimeShift ;
-        T sunsetWorldTimeHours  = trueSunPeak + timeDifference - localTimeShift;
-        nextSunriseUnixSecs=nextMidnightUnixSecs+sunriseWorldTimeHours*60*60;
-        nextSunsetUnixSecs=nextMidnightUnixSecs+sunsetWorldTimeHours*60*60;
-        //printf("nextMidnight=%ld, nextSunrise=%ld, nextSunset=%ld", nextMidnight, nextSunrise, nextSunset);
+        const T discrepancy = TimeFormulaHours<T>(DK, DaysSinceJan1_2000UTC(midnight));
+        const T trueSunPeak = 12.0 - discrepancy;
+        const T localTimeShift = longitudeRadiant / (DEG * 15.0);
+        const T sin_h = std::sin(((T)(int32_t)dawnLevel / 1000.0) * DEG);
+        const T cosHourAngle = (sin_h - std::sin(latitudeRadiant) * std::sin(DK)) / (std::cos(latitudeRadiant) * std::cos(DK));
+        if (cosHourAngle < -1.0 || cosHourAngle > 1.0)
+        {
+            return false;
+        }
+        const T timeDifference = 12.0 * std::acos(cosHourAngle) / PI;
+        sunriseUnixSecs = midnight + (time_t)std::lround((trueSunPeak - timeDifference - localTimeShift) * 3600.0);
+        sunsetUnixSecs = midnight + (time_t)std::lround((trueSunPeak + timeDifference - localTimeShift) * 3600.0);
+        return true;
     }
+
+    // Der naechste Aufgang und der naechste Untergang NACH unixSecs (jeweils heute oder morgen).
     template <typename T>
-    void DuskTillDawn(time_t unixSecs, T latitudeRadiant, T longitudeRadiant, eDawn dawnLevel)
+    bool NextSunriseAndSunset(time_t unixSecs, T latitudeRadiant, T longitudeRadiant, eDawn dawnLevel, time_t &nextSunriseUnixSecs, time_t &nextSunsetUnixSecs)
     {
-
-        T DK{0};
-        int32_t Tdays = DaysSinceJan1_2020UTC(unixSecs);
-        printf("Tdays=%d; T=%f\n", Tdays, Tdays/36525.0);
-        T discrepancy = TimeFormulaHours<T>(DK, Tdays);
-        T trueSunPeak = 12.0 - discrepancy;
-        const T localTimeShift=longitudeRadiant/(RAD * 15.0f);
-        const float sin_h = std::bit_cast<float>(dawnLevel);
-        T timeDifference = 12.0*acos((sin_h - sin(latitudeRadiant) * sin(DK)) / (cos(latitudeRadiant) * cos(DK)))/M_PI;
-        
-        T sunriseWorldTime = trueSunPeak - timeDifference - localTimeShift ;
-        T sunsetWorldTime  = trueSunPeak + timeDifference - localTimeShift;
-        printf("DK=%f; discrepancy=%f; timeDifference=%f; sin_h=%f; sin(lat)=%f; sunriseWorld=%f; sunsetWorld=%f\n", DK, discrepancy, timeDifference, sin_h, sin(latitudeRadiant), sunriseWorldTime, sunsetWorldTime);
-
-        
-        const float Zeitzone = 1;
-
-        T Aufgang = sunriseWorldTime + Zeitzone + (1 / 120.0f); // In hours, with rounding to nearest minute (1/60 * .5)
-        Aufgang = std::fmod(Aufgang, 24.0f); // force 0 <= x < 24.0
-        int AufgangStunden = (int)Aufgang;
-        int AufgangMinuten = (int)(60.0f * std::fmod(Aufgang, 1.0f));
-        
-        T Untergang = sunsetWorldTime + Zeitzone;
-        Untergang = std::fmod(Untergang, 24.0f);
-        int UntergangStunden = (int)Untergang;
-        int UntergangMinuten = (int)(60.0f * std::fmod(Untergang, 1.0f));
-       
-        //printf("Aufgang: %d:%d, Untergang %d:%d", AufgangStunden, AufgangMinuten, UntergangStunden, UntergangMinuten);
+        time_t rise, set, riseTomorrow, setTomorrow;
+        if (!SunriseAndSunsetOfDay<T>(unixSecs, latitudeRadiant, longitudeRadiant, dawnLevel, rise, set) ||
+            !SunriseAndSunsetOfDay<T>(unixSecs + ONE_DAY, latitudeRadiant, longitudeRadiant, dawnLevel, riseTomorrow, setTomorrow))
+        {
+            return false;
+        }
+        nextSunriseUnixSecs = rise > unixSecs ? rise : riseTomorrow;
+        nextSunsetUnixSecs = set > unixSecs ? set : setTomorrow;
+        return true;
     }
 }
-
-/*
-int main()
-{
-    double today = 1128038400;//30. September 2005
-    double latDeg = 50;//52.0965;
-    double lonDeg = 10;//7.6171;
-    tms_t nextSunrise{0};
-    tms_t nextSunset{0};
-    sunsetsunrise::NextSunriseAndSunset(today, latDeg * RAD, lonDeg * RAD, sunsetsunrise::eDawn::NORMAL, nextSunrise, nextSunset);
-    return 0;
-}
-*/
