@@ -2,7 +2,6 @@
 #include <inttypes.h>
 #include <algorithm>
 #include <cmath>
-#define TAG "CRGB"
 
 //#define PrepareColorGRB(rgb) ( (((rgb) << 8) & 0x00FF0000) | (((rgb) >> 8) & 0x0000FF00) | (rgb & 0x000000FF) )
 //#define PrepareColor PrepareColorGRB
@@ -411,4 +410,3 @@ inline bool operator!=(const CRGB &lhs, const CRGB &rhs)
 {
     return !(lhs == rhs);
 }
-#undef TAG
