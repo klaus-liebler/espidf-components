@@ -53,7 +53,8 @@ namespace CodecManager
         virtual ErrorCode SetSampleRate(uint32_t sampleRateHz) = 0;
 
     public:
-        // sampleCnt sind die Anzahl der 16bit-Werte. Diese sind bei Stereo doppelt so groß, wie bei Mono. Also bei Mono 44100Hz gibt es pro sek 44100 samples und bei Stereo eben 88200
+        // sampleCnt ist die Anzahl der Samples PRO KANAL (bei 44100 Hz also 44100 pro Sekunde, egal ob Mono
+        // oder Stereo). Ein Stereo-Puffer enthaelt demnach 2*sampleCnt Werte (L/R verschraenkt).
         virtual ErrorCode WriteAudioData(eChannels ch, eSampleBits bits, uint32_t sampleRateHz, size_t sampleCnt, void *buf) = 0;
 
         virtual ErrorCode SetPowerState(bool power) = 0;
@@ -71,11 +72,16 @@ namespace CodecManager
             {
                 return ErrorCode::FUNCTION_NOT_AVAILABLE;
             }
+            // sampleCnt = Samples PRO KANAL (wie minimp3 und der interne DAC es zaehlen). Das I2S
+            // laeuft immer stereo: nach makeStereoFromMono liegen auch bei Mono 2*sampleCnt Werte
+            // im Puffer. Frueher wurde bei Stereo nur sampleCnt Werte (= die halbe Datenmenge)
+            // geschrieben -- die zweite Haelfte jedes Dekodierblocks fehlte, Stereo-MP3s klangen
+            // gehetzt/zu schnell.
             if (ch == eChannels::ONE)
             {
                 makeStereoFromMono((int16_t *)buf, sampleCnt);
-                sampleCnt *= 2;
             }
+            sampleCnt *= 2;
             if (sampleRateHz != this->currentSampleRateHz)
             {
                 SetSampleRate(sampleRateHz);

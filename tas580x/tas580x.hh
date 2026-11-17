@@ -233,7 +233,7 @@ namespace TAS580x
 			uint8_t reg = 0;
 			RETURN_ON_ERRORCODE(EnsureI2CDevice());
 			RETURN_ON_ERRORCODE(i2c_device->ReadRegister(R::DEVICE_CTRL_2, &reg, 1));
-			reg = (reg && 0xFC)|(uint8_t)state;
+			reg = (reg & 0xFC)|(uint8_t)state; // war "&&": loeschte Mute- und DSP-Bits
 			return i2c_device->WriteRegisterU8(R::DEVICE_CTRL_2, reg);
 		}
 
